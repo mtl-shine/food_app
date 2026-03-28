@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Питание">
+<link rel="manifest" href="manifest.json">
 <title>Моё питание</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -372,8 +373,35 @@ select option{background:#1a1a2e;color:var(--text)}
   </div>
 </div>
 
-<!-- ADD PRODUCT -->
+<!-- ADD PRODUCT — выбор способа -->
 <div class="scr" id="scr-add-product">
+  <div class="si">
+    <div class="card">
+      <div class="ct">Как добавить?</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <button onclick="showAddMethod('photo')" style="display:flex;align-items:center;gap:12px;padding:14px;background:rgba(255,255,255,0.05);border:0.5px solid var(--cb);border-radius:11px;color:var(--text);cursor:pointer;text-align:left">
+          <span style="font-size:26px">📷</span>
+          <div><div style="font-size:14px;font-weight:500">Сфотографировать</div><div style="font-size:11px;color:var(--text2);margin-top:2px">Claude прочитает этикетку — КБЖУ и срок</div></div>
+        </button>
+        <button onclick="showAddMethod('text')" style="display:flex;align-items:center;gap:12px;padding:14px;background:rgba(255,255,255,0.05);border:0.5px solid var(--cb);border-radius:11px;color:var(--text);cursor:pointer;text-align:left">
+          <span style="font-size:26px">📝</span>
+          <div><div style="font-size:14px;font-weight:500">Текстом (список)</div><div style="font-size:11px;color:var(--text2);margin-top:2px">Напиши сразу много — КБЖУ и сроки заполнятся автоматически</div></div>
+        </button>
+        <button onclick="showAddMethod('manual')" style="display:flex;align-items:center;gap:12px;padding:14px;background:rgba(255,255,255,0.05);border:0.5px solid var(--cb);border-radius:11px;color:var(--text);cursor:pointer;text-align:left">
+          <span style="font-size:26px">✏️</span>
+          <div><div style="font-size:14px;font-weight:500">Вручную</div><div style="font-size:11px;color:var(--text2);margin-top:2px">Заполнить форму самостоятельно</div></div>
+        </button>
+        <button onclick="showAddMethod('barcode')" style="display:flex;align-items:center;gap:12px;padding:14px;background:rgba(255,255,255,0.05);border:0.5px solid var(--cb);border-radius:11px;color:var(--text);cursor:pointer;text-align:left">
+          <span style="font-size:26px">📊</span>
+          <div><div style="font-size:14px;font-weight:500">Штрихкод</div><div style="font-size:11px;color:var(--text2);margin-top:2px">Сканировать — данные подтянутся из базы или Open Food Facts</div></div>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD PRODUCT — фото -->
+<div class="scr" id="scr-add-photo">
   <div class="si">
     <div class="card">
       <div class="pz" onclick="document.getElementById('photoInput').click()">
@@ -398,12 +426,88 @@ select option{background:#1a1a2e;color:var(--text)}
         <div class="ig"><label class="il">Жиры/100г</label><input type="number" id="p-fat" placeholder="3.6"></div>
         <div class="ig"><label class="il">Углев./100г</label><input type="number" id="p-carb" placeholder="0"></div>
       </div>
-      <button class="bp" onclick="addProduct()" style="margin-top:4px">Добавить в холодильник</button>
+      <div class="ig" style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+        <input type="checkbox" id="p-opened" style="width:18px;height:18px;flex-shrink:0">
+        <label for="p-opened" style="font-size:13px;color:var(--text2);cursor:pointer">Упаковка уже вскрыта (срок сократится)</label>
+      </div>
+      <div class="ig"><label class="il">Дней после вскрытия (если указано на упаковке)</label><input type="number" id="p-afteropen" placeholder="оставь пустым для авто"></div>
     </div>
   </div>
 </div>
 
-<!-- ADD DISH -->
+<!-- ADD PRODUCT — текстом -->
+<div class="scr" id="scr-add-text">
+  <div class="si">
+    <div class="card">
+      <div class="ct">Список продуктов</div>
+      <div class="na" style="margin-bottom:10px">Пиши в свободной форме. Что знаешь — указывай, остальное Claude заполнит сам.</div>
+      <textarea id="textImportInput" placeholder="творог Dovgan 250г, калории 121, белки 17, жиры 5&#10;куриная грудка 600г&#10;гречка 800г&#10;помидоры 3 штуки&#10;укроп&#10;яйца 10шт&#10;оливковое масло 500мл" style="min-height:180px;margin-bottom:10px"></textarea>
+      <button class="bp" id="textImportBtn" onclick="importFromText()">Добавить всё в холодильник</button>
+      <div id="textImportStatus" style="margin-top:10px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD PRODUCT — вручную -->
+<div class="scr" id="scr-add-manual">
+  <div class="si">
+    <div class="card">
+      <div class="ig"><label class="il">Название *</label><input type="text" id="pm-name" placeholder="Куриная грудка"></div>
+      <div class="ir">
+        <div class="ig"><label class="il">Вес (г)</label><input type="number" id="pm-weight" placeholder="500"></div>
+        <div class="ig"><label class="il">Срок годности</label><input type="text" id="pm-expiry" placeholder="31.12.2025"></div>
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">Ккал/100г</label><input type="number" id="pm-kcal" placeholder="165"></div>
+        <div class="ig"><label class="il">Белки/100г</label><input type="number" id="pm-prot" placeholder="31"></div>
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">Жиры/100г</label><input type="number" id="pm-fat" placeholder="3.6"></div>
+        <div class="ig"><label class="il">Углев./100г</label><input type="number" id="pm-carb" placeholder="0"></div>
+      </div>
+      <div class="ig" style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+        <input type="checkbox" id="pm-opened" style="width:18px;height:18px;flex-shrink:0">
+        <label for="pm-opened" style="font-size:13px;color:var(--text2);cursor:pointer">Упаковка уже вскрыта (срок сократится)</label>
+      </div>
+      <div class="ig"><label class="il">Дней после вскрытия (если указано на упаковке)</label><input type="number" id="pm-afteropen" placeholder="оставь пустым для авто"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD PRODUCT — штрихкод -->
+<div class="scr" id="scr-add-barcode">
+  <div class="si">
+    <div class="card">
+      <div class="pz" onclick="startBarcodeScanner()">
+        <div class="ph">📊</div>
+        <div class="pt">Нажми чтобы сканировать штрихкод<br><span style="font-size:10px;opacity:0.6">Сначала ищем в твоей базе, затем в Open Food Facts</span></div>
+      </div>
+      <div id="barcodeVideo" style="display:none;margin-bottom:12px">
+        <video id="barcodeStream" style="width:100%;border-radius:9px" playsinline autoplay></video>
+        <div id="barcodeStatus" style="text-align:center;padding:8px;font-size:12px;color:var(--text2)">Наведи камеру на штрихкод...</div>
+        <button onclick="stopBarcodeScanner()" class="bs" style="margin-top:6px">Отменить</button>
+      </div>
+      <div id="barcodeResult" style="display:none">
+        <div id="barcodeFound" style="margin-bottom:12px"></div>
+        <div class="ig"><label class="il">Вес (г) *</label><input type="number" id="bc-weight" placeholder="500"></div>
+        <div class="ig"><label class="il">Срок годности</label><input type="text" id="bc-expiry" placeholder="31.12.2025"></div>
+        <div class="ig"><label class="il">Дней после вскрытия (если указано на упаковке)</label><input type="number" id="bc-afteropen" placeholder="оставь пустым для авто"></div>
+        <div class="ig" style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+          <input type="checkbox" id="bc-opened" style="width:18px;height:18px;flex-shrink:0">
+          <label for="bc-opened" style="font-size:13px;color:var(--text2);cursor:pointer">Упаковка уже вскрыта</label>
+        </div>
+        <button class="bp" onclick="addProductFromBarcode()">Добавить в холодильник</button>
+        <button class="bs" onclick="editBarcodeProduct()">Редактировать данные</button>
+      </div>
+    </div>
+    <!-- История базы -->
+    <div class="card">
+      <div class="sh"><span class="ct" style="margin:0">База продуктов</span></div>
+      <div class="sx"><span class="sxi">🔍</span><input type="text" id="historySearch" placeholder="Поиск в базе..." oninput="renderHistory()"></div>
+      <div id="historyList"></div>
+    </div>
+  </div>
+</div>
 <div class="scr" id="scr-add-dish">
   <div class="si">
     <div class="card">
@@ -521,7 +625,402 @@ function subScreen(name,title,prev){
 
 function switchToSettings(){subScreen('settings','Настройки',curNav()||'menu');}
 function toCalc(){subScreen('calc','Калькулятор КБЖУ','settings');}
-function showAddProduct(){clearPForm();subScreen('add-product','Добавить продукт','products');}
+function showAddProduct(){subScreen('add-product','Добавить продукт','products');}
+
+/* ── ИКОНКИ ── */
+function getProductIcon(name){
+  const n=name.toLowerCase();
+  if(n.match(/курин|индейк|говядин|свинин|баранин|телятин|фарш|мясо|колбас|сосиск|ветчин/))return'🥩';
+  if(n.match(/рыб|сёмг|форел|треск|минтай|тунец|лосос|карп|судак|скумбри/))return'🐟';
+  if(n.match(/креветк|кальмар|осьминог|мидий|морепродукт/))return'🦐';
+  if(n.match(/молок|кефир|ряженк|простоквашк|сливк/))return'🥛';
+  if(n.match(/творог|йогурт|сметан/))return'🧴';
+  if(n.match(/сыр/))return'🧀';
+  if(n.match(/яйц/))return'🥚';
+  if(n.match(/масло сливочн|масло топлён/))return'🧈';
+  if(n.match(/гречк|овсянк|рис|перловк|булгур|киноа|пшено|кукурузн|манн/))return'🌾';
+  if(n.match(/макарон|паст|спагетт|лапш|вермишел/))return'🍝';
+  if(n.match(/хлеб|батон|булк|багет|лаваш|питт/))return'🍞';
+  if(n.match(/помидор|томат/))return'🍅';
+  if(n.match(/огурец/))return'🥒';
+  if(n.match(/перец|болгарск/))return'🫑';
+  if(n.match(/морковь|морковк/))return'🥕';
+  if(n.match(/картофел|картошк/))return'🥔';
+  if(n.match(/капуст|броккол|цветн|пекинск/))return'🥦';
+  if(n.match(/лук|чеснок/))return'🧅';
+  if(n.match(/баклажан/))return'🍆';
+  if(n.match(/кабачок|цукини/))return'🥬';
+  if(n.match(/свёкл|свекл/))return'🫚';
+  if(n.match(/шпинат|руккол|салат|мангольд|листов/))return'🥬';
+  if(n.match(/укроп|петрушк|кинза|базилик|мята|зелен/))return'🌿';
+  if(n.match(/гриб/))return'🍄';
+  if(n.match(/яблок/))return'🍎';
+  if(n.match(/груш/))return'🍐';
+  if(n.match(/банан/))return'🍌';
+  if(n.match(/апельсин|мандарин/))return'🍊';
+  if(n.match(/лимон|лайм/))return'🍋';
+  if(n.match(/персик|абрикос|нектарин/))return'🍑';
+  if(n.match(/слив/))return'🫐';
+  if(n.match(/виноград/))return'🍇';
+  if(n.match(/арбуз/))return'🍉';
+  if(n.match(/клубник/))return'🍓';
+  if(n.match(/черник|малин|смород|вишн|черешн|ягод/))return'🫐';
+  if(n.match(/орех|миндал|кешью|фундук|арахис|фисташк/))return'🥜';
+  if(n.match(/семен|льн|чиа|кунжут|подсолнечн/))return'🌻';
+  if(n.match(/масл/))return'🫙';
+  if(n.match(/мёд|мед/))return'🍯';
+  if(n.match(/шоколад|конфет|печень|торт|пирог|десерт|сладост/))return'🍫';
+  if(n.match(/сахар|сахарозамен|стевия|эритрит/))return'🍬';
+  if(n.match(/соус|кетчуп|майонез|горчиц|аджик/))return'🥫';
+  if(n.match(/фасол|чечевиц|горох|нут|бобов/))return'🫘';
+  if(n.match(/тофу|соев/))return'🫘';
+  if(n.match(/кофе|чай/))return'☕';
+  if(n.match(/сок|компот|морс/))return'🧃';
+  if(n.match(/вод/))return'💧';
+  return'🥗';
+}
+
+/* ── ШТРИХКОД ── */
+let barcodeStream=null;let barcodeInterval=null;let currentBarcodeProduct=null;
+
+function showAddMethod(method){
+  if(method==='photo'){
+    clearPForm();subScreen('add-photo','Фото продукта','add-product');
+  }else if(method==='text'){
+    document.getElementById('textImportInput').value='';
+    document.getElementById('textImportStatus').innerHTML='';
+    subScreen('add-text','Список текстом','add-product');
+  }else if(method==='barcode'){
+    document.getElementById('barcodeResult').style.display='none';
+    document.getElementById('barcodeVideo').style.display='none';
+    renderHistory();
+    subScreen('add-barcode','Штрихкод / База','add-product');
+  }else{
+    clearManualForm();subScreen('add-manual','Добавить вручную','add-product');
+  }
+}
+
+async function startBarcodeScanner(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    barcodeStream=stream;
+    const video=document.getElementById('barcodeStream');
+    video.srcObject=stream;
+    document.getElementById('barcodeVideo').style.display='block';
+    // Используем BarcodeDetector если доступен
+    if('BarcodeDetector' in window){
+      const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
+      barcodeInterval=setInterval(async()=>{
+        try{
+          const barcodes=await detector.detect(video);
+          if(barcodes.length>0){
+            clearInterval(barcodeInterval);
+            await handleBarcode(barcodes[0].rawValue);
+          }
+        }catch(e){}
+      },500);
+    }else{
+      document.getElementById('barcodeStatus').innerHTML='BarcodeDetector не поддерживается в этом браузере.<br>Введи штрихкод вручную: <input type="text" id="manualBarcode" style="width:140px;margin:4px" placeholder="4607186640291"><button onclick="handleBarcode(document.getElementById(\'manualBarcode\').value)" style="background:var(--acc);border:none;color:white;padding:5px 10px;border-radius:8px;cursor:pointer;font-size:12px">Найти</button>';
+    }
+  }catch(e){
+    alert('Нет доступа к камере: '+e.message);
+  }
+}
+
+function stopBarcodeScanner(){
+  if(barcodeStream){barcodeStream.getTracks().forEach(t=>t.stop());barcodeStream=null;}
+  if(barcodeInterval){clearInterval(barcodeInterval);barcodeInterval=null;}
+  document.getElementById('barcodeVideo').style.display='none';
+}
+
+async function handleBarcode(code){
+  stopBarcodeScanner();
+  document.getElementById('barcodeStatus').innerHTML=`<span class="spin"></span> Ищу ${code}...`;
+  document.getElementById('barcodeVideo').style.display='block';
+
+  // 1. Ищем в своей истории
+  const fromHistory=S.productHistory?.find(p=>p.barcode===code);
+  if(fromHistory){
+    currentBarcodeProduct={...fromHistory};
+    showBarcodeResult(currentBarcodeProduct,'📦 Найдено в твоей базе');
+    document.getElementById('barcodeVideo').style.display='none';
+    return;
+  }
+
+  // 2. Ищем в Open Food Facts
+  try{
+    const r=await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
+    const data=await r.json();
+    if(data.status===1&&data.product){
+      const p=data.product;
+      const n=p.nutriments||{};
+      currentBarcodeProduct={
+        barcode:code,
+        name:p.product_name_ru||p.product_name||p.generic_name||'Продукт '+code,
+        kcal:Math.round(n['energy-kcal_100g']||n['energy_100g']/4.184||0),
+        prot:Math.round((n.proteins_100g||0)*10)/10,
+        fat:Math.round((n.fat_100g||0)*10)/10,
+        carb:Math.round((n.carbohydrates_100g||0)*10)/10,
+        fiber:Math.round((n.fiber_100g||0)*10)/10,
+      };
+      currentBarcodeProduct.icon=getProductIcon(currentBarcodeProduct.name);
+      showBarcodeResult(currentBarcodeProduct,'🌐 Найдено в Open Food Facts');
+    }else{
+      document.getElementById('barcodeVideo').style.display='none';
+      alert(`Штрихкод ${code} не найден. Добавь продукт вручную.`);
+    }
+  }catch(e){
+    document.getElementById('barcodeVideo').style.display='none';
+    alert('Ошибка поиска. Проверь интернет.');
+  }
+}
+
+function showBarcodeResult(p,source){
+  document.getElementById('barcodeFound').innerHTML=`
+    <div class="ng" style="margin-bottom:0">${source}</div>
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:0.5px solid var(--cb)">
+      <span style="font-size:28px">${p.icon||'🥗'}</span>
+      <div>
+        <div style="font-size:14px;font-weight:500">${esc(p.name)}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">${p.kcal||0} ккал · Б${p.prot||0} Ж${p.fat||0} У${p.carb||0} /100г</div>
+      </div>
+    </div>`;
+  document.getElementById('barcodeResult').style.display='block';
+}
+
+function addProductFromBarcode(){
+  if(!currentBarcodeProduct)return;
+  const weight=parseFloat(document.getElementById('bc-weight').value)||0;
+  if(!weight){alert('Укажи вес');return;}
+  const opened=document.getElementById('bc-opened').checked;
+  const afterOpenDays=parseFloat(document.getElementById('bc-afteropen').value)||0;
+  let expiry=parseExp(document.getElementById('bc-expiry').value);
+  if(!expiry)expiry=autoExpiry(currentBarcodeProduct.name,opened);
+  if(opened){
+    if(afterOpenDays>0){const d=new Date();d.setDate(d.getDate()+afterOpenDays);
+      const fromOpen=d.toISOString().split('T')[0];
+      expiry=expiry&&expiry<fromOpen?expiry:fromOpen;
+    }else expiry=openedExpiry(expiry,currentBarcodeProduct.name);
+  }
+  const prod={id:Date.now(),...currentBarcodeProduct,weight,expiry,opened,
+    afterOpenDays:afterOpenDays||null};
+  S.products.push(prod);
+  // Сохраняем в историю
+  if(!S.productHistory)S.productHistory=[];
+  const idx=S.productHistory.findIndex(p=>p.barcode===currentBarcodeProduct.barcode||p.name.toLowerCase()===currentBarcodeProduct.name.toLowerCase());
+  if(idx>=0)S.productHistory[idx]={...currentBarcodeProduct,barcode:currentBarcodeProduct.barcode};
+  else S.productHistory.push({...currentBarcodeProduct});
+  save();
+  currentBarcodeProduct=null;
+  document.getElementById('barcodeResult').style.display='none';
+  document.getElementById('bc-weight').value='';
+  document.getElementById('bc-expiry').value='';
+  document.getElementById('bc-afteropen').value='';
+  document.getElementById('bc-opened').checked=false;
+  alert('Добавлено!');
+}
+
+function editBarcodeProduct(){
+  if(!currentBarcodeProduct)return;
+  // Заполняем ручную форму данными из штрихкода
+  document.getElementById('pm-name').value=currentBarcodeProduct.name||'';
+  document.getElementById('pm-kcal').value=currentBarcodeProduct.kcal||'';
+  document.getElementById('pm-prot').value=currentBarcodeProduct.prot||'';
+  document.getElementById('pm-fat').value=currentBarcodeProduct.fat||'';
+  document.getElementById('pm-carb').value=currentBarcodeProduct.carb||'';
+  subScreen('add-manual','Редактировать','add-barcode');
+}
+
+/* ── ИСТОРИЯ БАЗЫ ── */
+function renderHistory(){
+  const el=document.getElementById('historyList');if(!el)return;
+  const q=(document.getElementById('historySearch')?.value||'').toLowerCase();
+  // История + текущие продукты объединяем
+  const all=[...(S.productHistory||[]),...S.products].reduce((acc,p)=>{
+    if(!acc.find(x=>x.name.toLowerCase()===p.name.toLowerCase()))acc.push(p);
+    return acc;
+  },[]);
+  const filtered=q?all.filter(p=>p.name.toLowerCase().includes(q)):all.slice(0,20);
+  if(!filtered.length){el.innerHTML='<p style="font-size:12px;color:var(--text2)">База пуста — продукты появятся после добавления.</p>';return;}
+  el.innerHTML=filtered.map(p=>`<div class="pi" style="cursor:pointer" onclick="addFromHistory(${JSON.stringify(p).replace(/"/g,'&quot;')})">
+    <div class="pico">${p.icon||getProductIcon(p.name)}</div>
+    <div class="pinf"><div class="pnm">${esc(p.name)}</div><div class="pmt">${p.kcal||0} ккал · Б${p.prot||0} Ж${p.fat||0} У${p.carb||0}</div></div>
+    <span style="font-size:11px;color:var(--acc2)">+ добавить</span>
+  </div>`).join('');
+}
+
+function addFromHistory(p){
+  currentBarcodeProduct=p;
+  showBarcodeResult(p,'📦 Из базы');
+  document.getElementById('barcodeResult').style.display='block';
+  document.getElementById('bc-weight').value='';
+  document.getElementById('bc-expiry').value='';
+  window.scrollTo(0,0);
+}
+
+/* Автосрок по категории продукта */
+function autoExpiry(name,opened){
+  const n=name.toLowerCase();
+  let days=30; // по умолчанию
+  if(n.match(/укроп|петрушк|кинза|базилик|мята|тархун|зелен/))days=opened?3:5;
+  else if(n.match(/шпинат|руккол|салат|мангольд|листов/))days=opened?2:4;
+  else if(n.match(/помидор|томат|огурец|перец|кабачок|баклажан/))days=opened?4:7;
+  else if(n.match(/морковь|свёкл|свекл|капуст|редис|репа|пастернак/))days=opened?7:14;
+  else if(n.match(/ягод|клубник|малин|черник|смород|вишн|черешн/))days=opened?2:3;
+  else if(n.match(/банан|персик|слив|абрикос|нектарин/))days=opened?3:5;
+  else if(n.match(/яблок|груш|айва/))days=opened?7:14;
+  else if(n.match(/апельсин|лимон|мандарин|грейпфрут|лайм/))days=opened?5:14;
+  else if(n.match(/гриб/))days=opened?2:3;
+  else if(n.match(/лук зелён|перо лука/))days=opened?3:5;
+  else if(n.match(/творог|йогурт|кефир|ряженк|простоквашк/))days=opened?3:7;
+  else if(n.match(/молок|сливк/))days=opened?3:5;
+  else if(n.match(/сметан/))days=opened?5:10;
+  else if(n.match(/сыр твёрд|пармезан|гауда|эдам/))days=opened?14:30;
+  else if(n.match(/сыр мягк|моцарелл|рикотт|фет/))days=opened?3:7;
+  else if(n.match(/яйц/))days=30;
+  else if(n.match(/курин|индейк|говядин|свинин|баранин|мяс/))days=opened?2:3;
+  else if(n.match(/рыб|сёмг|форел|треск|минтай|тунец/))days=opened?2:2;
+  else if(n.match(/креветк|морепродукт/))days=opened?1:2;
+  else if(n.match(/гречк|овсянк|рис|перловк|булгур|киноа|пшено/))days=365;
+  else if(n.match(/макарон|паст|спагетт/))days=365;
+  else if(n.match(/масл/))days=opened?30:180;
+  else if(n.match(/хлеб|батон|булк/))days=3;
+  const d=new Date();d.setDate(d.getDate()+days);
+  return d.toISOString().split('T')[0];
+}
+
+/* Скорректировать срок с учётом вскрытия */
+function openedExpiry(expiry,productName){
+  const n=productName.toLowerCase();
+  let daysAfterOpen=7;
+  if(n.match(/укроп|петрушк|кинза|зелен|шпинат|руккол|салат/))daysAfterOpen=3;
+  else if(n.match(/помидор|огурец|перец|кабачок/))daysAfterOpen=4;
+  else if(n.match(/ягод|клубник|малин|черник/))daysAfterOpen=2;
+  else if(n.match(/творог|йогурт|кефир|ряженк/))daysAfterOpen=3;
+  else if(n.match(/молок|сливк/))daysAfterOpen=3;
+  else if(n.match(/сметан/))daysAfterOpen=5;
+  else if(n.match(/сыр мягк|моцарелл|рикотт|фет/))daysAfterOpen=3;
+  else if(n.match(/курин|говядин|свинин|мяс/))daysAfterOpen=2;
+  else if(n.match(/рыб|сёмг|форел/))daysAfterOpen=2;
+  else if(n.match(/масл/))daysAfterOpen=30;
+  else if(n.match(/гречк|овсянк|рис|макарон/))daysAfterOpen=90;
+  // Берём минимум из срока на упаковке и срока после вскрытия
+  const fromOpen=new Date();fromOpen.setDate(fromOpen.getDate()+daysAfterOpen);
+  if(!expiry)return fromOpen.toISOString().split('T')[0];
+  const onPack=new Date(expiry);
+  return(fromOpen<onPack?fromOpen:onPack).toISOString().split('T')[0];
+}
+
+function addProductForm(){
+  const name=document.getElementById('p-name').value.trim();
+  if(!name){alert('Укажи название');return;}
+  const opened=document.getElementById('p-opened').checked;
+  const afterOpenDays=parseFloat(document.getElementById('p-afteropen').value)||0;
+  let expiry=parseExp(document.getElementById('p-expiry').value);
+  if(!expiry)expiry=autoExpiry(name,opened);
+  else if(opened){
+    if(afterOpenDays>0){const d=new Date();d.setDate(d.getDate()+afterOpenDays);
+      const fo=d.toISOString().split('T')[0];expiry=expiry<fo?expiry:fo;
+    }else expiry=openedExpiry(expiry,name);
+  }
+  const prod={id:Date.now(),name,icon:getProductIcon(name),
+    weight:parseFloat(document.getElementById('p-weight').value)||0,
+    expiry,opened,afterOpenDays:afterOpenDays||null,
+    kcal:parseFloat(document.getElementById('p-kcal').value)||0,
+    prot:parseFloat(document.getElementById('p-prot').value)||0,
+    fat:parseFloat(document.getElementById('p-fat').value)||0,
+    carb:parseFloat(document.getElementById('p-carb').value)||0};
+  S.products.push(prod);
+  addToHistory(prod);
+  save();clearPForm();
+  subScreen('add-product','Добавить продукт','products');
+}
+
+function addProductManual(){
+  const name=document.getElementById('pm-name').value.trim();
+  if(!name){alert('Укажи название');return;}
+  const opened=document.getElementById('pm-opened').checked;
+  let expiry=parseExp(document.getElementById('pm-expiry').value);
+  if(!expiry)expiry=autoExpiry(name,opened);
+  else if(opened)expiry=openedExpiry(expiry,name);
+  S.products.push({id:Date.now(),name,
+    weight:parseFloat(document.getElementById('pm-weight').value)||0,
+    expiry,opened,
+    kcal:parseFloat(document.getElementById('pm-kcal').value)||0,
+    prot:parseFloat(document.getElementById('pm-prot').value)||0,
+    fat:parseFloat(document.getElementById('pm-fat').value)||0,
+    carb:parseFloat(document.getElementById('pm-carb').value)||0,
+    icon:'🥗'});
+  save();
+  clearManualForm();
+  subScreen('add-product','Добавить продукт','products');
+}
+
+function clearManualForm(){
+  ['pm-name','pm-weight','pm-expiry','pm-kcal','pm-prot','pm-fat','pm-carb'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value='';
+  });
+  const cb=document.getElementById('pm-opened');if(cb)cb.checked=false;
+}
+
+/* Кнопка "вскрыть" на карточке продукта */
+function openProduct(id){
+  const p=S.products.find(x=>x.id===id);if(!p)return;
+  if(p.opened){alert('Продукт уже отмечен как вскрытый');return;}
+  p.opened=true;
+  p.expiry=openedExpiry(p.expiry,p.name);
+  save();renderProducts();
+}
+
+/* Текстовый импорт */
+async function importFromText(){
+  const text=document.getElementById('textImportInput').value.trim();
+  if(!text){alert('Напиши список продуктов');return;}
+  if(!S.settings.apikey){alert('Укажи API ключ в настройках');return;}
+  const btn=document.getElementById('textImportBtn');
+  const status=document.getElementById('textImportStatus');
+  btn.disabled=true;btn.innerHTML='<span class="spin"></span>Обрабатываю...';
+  status.innerHTML='';
+
+  const today=new Date().toISOString().split('T')[0];
+  const resp=await claude([{role:'user',content:`Разбери список продуктов и верни JSON. Сегодня ${today}.
+Для каждого продукта:
+- name: название
+- weight: вес в граммах (если штуки — примерный вес: яйцо ~60г, помидор ~150г, огурец ~200г)
+- kcal, prot, fat, carb: на 100г — если указано пользователем, иначе стандартные значения из базы знаний
+- expiry: дата YYYY-MM-DD — если указано пользователем, иначе рассчитай от сегодня по типичным срокам хранения (зелень 4-5 дней, мягкие овощи 7 дней, твёрдые овощи 14 дней, мясо/рыба 2-3 дня, молочка 5-7 дней, крупы 1 год и т.д.)
+- opened: false если не указано иное
+- icon: подходящий emoji
+
+Список:
+${text}
+
+Ответь ТОЛЬКО JSON: {"products":[{"name":"...","weight":0,"expiry":"YYYY-MM-DD","kcal":0,"prot":0,"fat":0,"carb":0,"opened":false,"icon":"🥗"}]}`}],
+  'Ты разбираешь список продуктов. Только JSON без markdown.',2000);
+
+  btn.disabled=false;btn.innerHTML='Добавить всё в холодильник';
+
+  if(!resp||typeof resp==='object'){
+    status.innerHTML=`<div class="nr">Ошибка: ${resp?.error||'нет ответа'}</div>`;return;
+  }
+  try{
+    const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
+    const list=data.products||[];
+    list.forEach(p=>{
+      if(!S.products.find(x=>x.name.toLowerCase()===p.name.toLowerCase())){
+        S.products.push({id:Date.now()+Math.random(),...p});
+      }
+    });
+    save();
+    status.innerHTML=`<div class="ng">✓ Добавлено ${list.length} продуктов</div>`;
+    setTimeout(()=>{
+      S.prevScreen='products';
+      goBack();
+    },1200);
+  }catch(e){
+    status.innerHTML=`<div class="nr">Ошибка разбора. Попробуй ещё раз.</div>`;
+  }
+}
 function showAddDish(){clearDForm();subScreen('add-dish','Добавить блюдо','dishes');}
 function showGutManual(){
   document.getElementById('gm-meal').value='';
@@ -623,8 +1122,9 @@ function renderProducts(){
       <div class="pinf"><div class="pnm">${esc(p.name)}</div><div class="pmt">${p.weight?p.weight+'г · ':''}${p.kcal?p.kcal+' ккал/100г':''}</div></div>
       <div style="text-align:right;flex-shrink:0;margin-right:3px">
         <div class="e${st}" style="font-size:11px">${fmtExp(p.expiry)}</div>
-        <div style="font-size:9px;color:var(--text2)">${st==='bad'?'просрочен':st==='warn'?'скоро':''}</div>
+        <div style="font-size:9px;color:var(--text2)">${st==='bad'?'просрочен':st==='warn'?'скоро':p.opened?'вскрыт':''}</div>
       </div>
+      ${!p.opened?`<button onclick="openProduct(${p.id})" style="background:none;border:0.5px solid rgba(245,166,35,0.4);color:var(--acc2);font-size:10px;padding:3px 7px;border-radius:20px;cursor:pointer;flex-shrink:0;white-space:nowrap">вскрыть</button>`:'<span style="font-size:10px;color:var(--text2);flex-shrink:0;padding:3px 7px">📭</span>'}
       <button class="xb" onclick="delProduct(${p.id},event)">×</button>
     </div>`;}).join('');
   const sc=document.getElementById('shoppingCard'),sl=document.getElementById('shoppingList');
@@ -905,8 +1405,13 @@ ${yazio}
 ПРОБЛЕМЫ С ЖКТ (эти продукты/сочетания вызывали дискомфорт — учти):
 ${gutBad}
 
-НЮАНСЫ:
-- Жиры из круп усваиваются на 20-40% хуже — учти при расчёте
+НЮАНСЫ ПО УСВОЯЕМОСТИ (учитывай при расчёте реального питательного вклада):
+- Жиры из круп (гречка, овсянка, рис и др.) усваиваются на 20-40% хуже из-за клетчатки и фитиновой кислоты
+- Жиры из орехов и семян усваиваются на ~80% из-за клеточных стенок
+- Растительный белок (бобовые, злаки, орехи) усваивается на 60-85%, животный — на 90-95%
+- Сахарозаменители (эритрит, стевия, сукралоза, аспартам) не считать в калории и углеводы
+- Клетчатка — вычитать из общих углеводов при расчёте чистых углеводов
+- Фитиновая кислота в бобовых снижает усвоение железа, цинка, кальция — рекомендуй замачивание
 - Скоропортящиеся — в начало недели
 - reason: 1-2 предложения о нутриентах/витаминах дня
 
@@ -1120,15 +1625,7 @@ async function processPhoto(event){
 }
 
 /* ── ADD PRODUCT ── */
-function clearPForm(){['p-name','p-weight','p-expiry','p-kcal','p-prot','p-fat','p-carb'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('photoPreview').style.display='none';}
-function addProduct(){
-  const name=document.getElementById('p-name').value.trim();if(!name){alert('Укажи название');return;}
-  S.products.push({id:Date.now(),name,weight:parseFloat(document.getElementById('p-weight').value)||0,
-    expiry:parseExp(document.getElementById('p-expiry').value),
-    kcal:parseFloat(document.getElementById('p-kcal').value)||0,prot:parseFloat(document.getElementById('p-prot').value)||0,
-    fat:parseFloat(document.getElementById('p-fat').value)||0,carb:parseFloat(document.getElementById('p-carb').value)||0,icon:'🥗'});
-  save();goBack();
-}
+function clearPForm(){['p-name','p-weight','p-expiry','p-kcal','p-prot','p-fat','p-carb'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const cb=document.getElementById('p-opened');if(cb)cb.checked=false;document.getElementById('photoPreview').style.display='none';}
 
 /* ── SETTINGS ── */
 const WD_LABELS=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
