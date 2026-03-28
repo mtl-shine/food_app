@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Питание">
+<title>Моё питание</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --acc:#e94560;--acc2:#f5a623;--acc3:#4ade80;--acc4:#818cf8;
+  --text:#f0f0f0;--text2:#a0a0b0;
+  --card:rgba(255,255,255,0.06);--cb:rgba(255,255,255,0.1);
+  --r:14px;
+  --st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;overflow:hidden;background:#1a1a2e}
+body{color:var(--text);font-family:-apple-system,'Segoe UI',sans-serif;font-size:16px}
+.app{max-width:430px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+.hdr{padding:calc(10px + var(--st)) 16px 10px;background:rgba(22,33,62,0.98);border-bottom:0.5px solid var(--cb);display:flex;align-items:center;gap:10px;flex-shrink:0;z-index:10}
+.back{background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;padding:4px 8px 4px 0;display:none;line-height:1}
+.hdr h1{font-size:16px;font-weight:500;flex:1}
+.ha{display:flex;gap:6px;align-items:center}
+.ib{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.08);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.nav{display:flex;padding:5px 4px;gap:1px;background:rgba(22,33,62,0.98);border-bottom:0.5px solid var(--cb);flex-shrink:0}
+.nb{flex:1;padding:6px 2px;background:none;border:none;color:var(--text2);font-size:8.5px;cursor:pointer;border-radius:8px;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all 0.15s}
+.nb.active{color:var(--acc);background:rgba(233,69,96,0.1)}
+.ni{font-size:16px;line-height:1}
+.scr{display:none;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.scr.active{display:block}
+.si{padding:12px 12px calc(12px + var(--sb))}
+.card{background:var(--card);border:0.5px solid var(--cb);border-radius:var(--r);padding:14px;margin-bottom:10px}
+.ct{font-size:10px;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.6px;font-weight:500}
+/* day cards */
+.dc{background:var(--card);border:0.5px solid var(--cb);border-radius:var(--r);padding:13px;margin-bottom:9px;cursor:pointer;transition:border-color 0.15s}
+.dc:active{opacity:0.75}
+.dc.today{border-color:rgba(245,166,35,0.5);background:rgba(245,166,35,0.05)}
+.dc.past{opacity:0.45}
+.dc.workout{border-left:3px solid #818cf8}
+.dh{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+.dn{font-size:14px;font-weight:500}
+.dd{font-size:11px;color:var(--text2)}
+.dbg{font-size:9px;padding:2px 7px;border-radius:20px}
+.dbg-today{background:rgba(245,166,35,0.2);color:var(--acc2)}
+.dbg-wo{background:rgba(129,140,248,0.2);color:#818cf8}
+.ml2{font-size:12px;color:var(--text2);display:flex;gap:5px;align-items:baseline;margin-bottom:2px}
+.mt2{font-size:9px;color:var(--text2);min-width:52px;opacity:0.7}
+.mr2{display:flex;gap:5px;margin-top:9px;padding-top:9px;border-top:0.5px solid var(--cb)}
+.mv{font-size:12px;font-weight:500}
+.mlb{font-size:8px;color:var(--text2);margin-top:1px}
+.pb{height:3px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:3px;overflow:hidden}
+.pf{height:100%;border-radius:2px}
+/* ЖКТ badge on day */
+.gut-ok{font-size:10px;color:var(--acc3);margin-top:4px}
+.gut-bad{font-size:10px;color:var(--acc);margin-top:4px}
+/* buttons */
+.bp{width:100%;padding:13px;background:var(--acc);border:none;border-radius:var(--r);color:white;font-size:14px;font-weight:500;cursor:pointer;transition:opacity 0.15s}
+.bp:active{opacity:0.8}
+.bs{width:100%;padding:11px;background:none;border:0.5px solid var(--cb);border-radius:var(--r);color:var(--text2);font-size:13px;cursor:pointer;transition:all 0.15s;margin-top:7px}
+.bs:active{border-color:var(--acc);color:var(--acc)}
+/* inputs */
+.ig{margin-bottom:11px}
+.il{font-size:11px;color:var(--text2);margin-bottom:4px;display:block}
+.ir{display:flex;gap:7px}.ir .ig{flex:1}
+input[type=text],input[type=number],input[type=password],textarea,select{background:rgba(255,255,255,0.07);border:0.5px solid var(--cb);border-radius:9px;padding:10px 12px;color:var(--text);font-size:13px;width:100%;outline:none;-webkit-appearance:none;font-family:inherit}
+input:focus,textarea:focus,select:focus{border-color:var(--acc);background:rgba(255,255,255,0.09)}
+textarea{resize:none;line-height:1.5}
+select option{background:#1a1a2e;color:var(--text)}
+/* products */
+.pi{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:0.5px solid var(--cb)}
+.pi:last-child{border-bottom:none}
+.pico{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.pinf{flex:1;min-width:0}
+.pnm{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pmt{font-size:10px;color:var(--text2);margin-top:2px}
+.eok{color:#4ade80}.ewarn{color:var(--acc2)}.ebad{color:var(--acc)}
+.xb{background:none;border:none;color:var(--text2);font-size:17px;cursor:pointer;padding:5px;flex-shrink:0}
+/* tags */
+.tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;margin:2px}
+.tg{background:rgba(74,222,128,0.15);color:#4ade80}
+.ta{background:rgba(245,166,35,0.15);color:var(--acc2)}
+.tr{background:rgba(233,69,96,0.15);color:var(--acc)}
+.tp{background:rgba(129,140,248,0.15);color:#818cf8}
+.tb{background:rgba(56,189,248,0.15);color:#38bdf8}
+/* chat */
+.cw{display:flex;flex-direction:column;height:100%}
+.cm{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;-webkit-overflow-scrolling:touch}
+.msg{max-width:87%;padding:9px 13px;border-radius:15px;font-size:13px;line-height:1.5}
+.mu{align-self:flex-end;background:var(--acc);color:white;border-bottom-right-radius:4px}
+.ma{align-self:flex-start;background:rgba(255,255,255,0.09);border-bottom-left-radius:4px}
+.ma.loading{color:var(--text2)}
+.cf{padding:9px 12px calc(9px + var(--sb));border-top:0.5px solid var(--cb);background:rgba(22,33,62,0.98);display:flex;gap:7px;align-items:flex-end}
+.cf textarea{flex:1;min-height:40px;max-height:85px}
+.sb2{width:40px;height:40px;border-radius:50%;background:var(--acc);border:none;color:white;font-size:19px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;line-height:1}
+/* notices */
+.na{background:rgba(245,166,35,0.1);border:0.5px solid rgba(245,166,35,0.3);border-radius:9px;padding:10px;font-size:12px;color:var(--acc2);margin-bottom:9px;line-height:1.5}
+.nr{background:rgba(233,69,96,0.1);border:0.5px solid rgba(233,69,96,0.3);border-radius:9px;padding:10px;font-size:12px;color:var(--acc);margin-bottom:9px;line-height:1.5}
+.ng{background:rgba(74,222,128,0.1);border:0.5px solid rgba(74,222,128,0.3);border-radius:9px;padding:10px;font-size:12px;color:#4ade80;margin-bottom:9px;line-height:1.5}
+/* day detail */
+.dm{padding:10px 0;border-bottom:0.5px solid var(--cb)}
+.dm:last-child{border-bottom:none}
+.dmh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.dmn{font-size:14px;font-weight:500}
+.dmk{font-size:11px;color:var(--text2)}
+.rb{background:rgba(255,255,255,0.04);border-radius:9px;padding:11px;margin-top:4px;font-size:12px;color:var(--text2);line-height:1.6;border-left:3px solid var(--acc2)}
+/* photo */
+.pz{border:1.5px dashed rgba(255,255,255,0.2);border-radius:var(--r);padding:24px;text-align:center;cursor:pointer;transition:all 0.15s;margin-bottom:12px}
+.pz:active{border-color:var(--acc)}
+.ph{font-size:32px;margin-bottom:7px}
+.pt{font-size:12px;color:var(--text2);line-height:1.5}
+/* empty */
+.es{text-align:center;padding:36px 16px}
+.ei{font-size:44px;margin-bottom:12px}
+.ett{font-size:15px;font-weight:500;margin-bottom:7px}
+.es2{font-size:12px;color:var(--text2);margin-bottom:20px;line-height:1.5}
+/* spinner */
+.spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,0.2);border-top-color:white;border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:middle;margin-right:5px}
+@keyframes sp{to{transform:rotate(360deg)}}
+/* section header */
+.sh{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.addb{background:none;border:0.5px solid var(--acc);color:var(--acc);padding:5px 12px;border-radius:20px;font-size:11px;cursor:pointer}
+/* dish */
+.dii{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:0.5px solid var(--cb)}
+.dii:last-child{border-bottom:none}
+.dii-inf{flex:1;min-width:0}
+.dii-nm{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dii-mt{font-size:10px;color:var(--text2);margin-top:2px}
+.lk{background:none;border:none;font-size:18px;cursor:pointer;padding:3px;flex-shrink:0;transition:transform 0.15s}
+.lk:active{transform:scale(1.3)}
+/* search */
+.sx{position:relative;margin-bottom:10px}
+.sx input{padding-left:30px}
+.sxi{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text2);font-size:13px;pointer-events:none}
+/* calc */
+.cr{background:rgba(233,69,96,0.08);border:0.5px solid rgba(233,69,96,0.25);border-radius:var(--r);padding:14px;margin-top:12px}
+.crow{display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--cb);font-size:13px}
+.crow:last-child{border-bottom:none}
+.clb{color:var(--text2)}
+.cvl{font-weight:500}
+.cmain{font-size:18px;font-weight:500;color:var(--acc2);text-align:center;padding:10px 0 6px}
+/* gut tracker */
+.gut-entry{padding:10px 0;border-bottom:0.5px solid var(--cb)}
+.gut-entry:last-child{border-bottom:none}
+.gut-time{font-size:10px;color:var(--text2);margin-bottom:3px}
+.gut-text{font-size:13px;line-height:1.5}
+.gut-status-ok{color:#4ade80}
+.gut-status-bad{color:var(--acc)}
+/* workout days selector */
+.wd-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:6px}
+.wd-btn{padding:8px 0;border-radius:8px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:11px;cursor:pointer;text-align:center;transition:all 0.15s}
+.wd-btn.sel{background:rgba(129,140,248,0.2);border-color:#818cf8;color:#818cf8}
+/* meal count */
+.mc-row{display:flex;gap:8px;margin-top:6px}
+.mc-btn{flex:1;padding:10px;border-radius:10px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:13px;cursor:pointer;transition:all 0.15s;text-align:center}
+.mc-btn.sel{background:rgba(233,69,96,0.15);border-color:var(--acc);color:var(--acc)}
+/* yazio status */
+.yz-ok{background:rgba(74,222,128,0.08);border:0.5px solid rgba(74,222,128,0.3);border-radius:9px;padding:10px;font-size:12px;color:#4ade80;margin-top:8px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="hdr">
+  <button class="back" id="backBtn" onclick="goBack()">←</button>
+  <h1 id="hTitle">Моё питание</h1>
+  <div class="ha">
+    <button class="ib" id="refreshBtn" onclick="generateWeekMenu()" style="display:none" title="Пересоставить">↺</button>
+    <button class="ib" onclick="switchToSettings()">⚙</button>
+  </div>
+</div>
+
+<div class="nav" id="mainNav">
+  <button class="nb active" id="nav-menu" onclick="switchNav('menu',this)"><span class="ni">📅</span>Меню</button>
+  <button class="nb" id="nav-products" onclick="switchNav('products',this)"><span class="ni">🛒</span>Продукты</button>
+  <button class="nb" id="nav-dishes" onclick="switchNav('dishes',this)"><span class="ni">❤</span>Блюда</button>
+  <button class="nb" id="nav-gut" onclick="switchNav('gut',this)"><span class="ni">🫁</span>ЖКТ</button>
+  <button class="nb" id="nav-chat" onclick="switchNav('chat',this)"><span class="ni">💬</span>Чат</button>
+  <button class="nb" id="nav-tips" onclick="switchNav('tips',this)"><span class="ni">💡</span>Советы</button>
+</div>
+
+<!-- MENU -->
+<div class="scr active" id="scr-menu"><div class="si" id="menuContent"></div></div>
+
+<!-- PRODUCTS -->
+<div class="scr" id="scr-products">
+  <div class="si">
+    <div class="card">
+      <div class="sh"><span class="ct" style="margin:0">В холодильнике</span><button class="addb" onclick="showAddProduct()">+ добавить</button></div>
+      <div id="productsList"></div>
+    </div>
+    <div class="card" id="shoppingCard" style="display:none">
+      <div class="ct">Список покупок</div>
+      <div id="shoppingList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DISHES -->
+<div class="scr" id="scr-dishes">
+  <div class="si">
+    <div class="card">
+      <div class="sh"><span class="ct" style="margin:0">Все блюда</span><button class="addb" onclick="showAddDish()">+ добавить</button></div>
+      <div style="display:flex;gap:5px;margin-bottom:10px">
+        <button onclick="setDF('all',this)" class="addb" style="flex:1" id="df-all">Все</button>
+        <button onclick="setDF('liked',this)" class="addb" style="flex:1;border-color:var(--cb);color:var(--text2)" id="df-liked">❤ Любимые</button>
+        <button onclick="setDF('dis',this)" class="addb" style="flex:1;border-color:var(--cb);color:var(--text2)" id="df-dis">👎 Стоп</button>
+      </div>
+      <div class="sx"><span class="sxi">🔍</span><input type="text" id="dishSearch" placeholder="Поиск..." oninput="renderDishes()"></div>
+      <div id="dishesList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- GUT TRACKER -->
+<div class="scr" id="scr-gut">
+  <div class="si">
+    <!-- Pending check (показывается если есть что проверить) -->
+    <div id="gutPending" style="display:none"></div>
+    <div class="card">
+      <div class="sh"><span class="ct" style="margin:0">История ЖКТ</span>
+        <button class="addb" onclick="showGutManual()">+ вручную</button>
+      </div>
+      <div id="gutHistory"></div>
+    </div>
+    <div class="card" id="gutAnalysisCard" style="display:none">
+      <div class="ct">Анализ Claude</div>
+      <div id="gutAnalysis"></div>
+    </div>
+    <button class="bs" onclick="analyzeGut()" style="margin-top:4px">🔍 Проанализировать паттерны</button>
+  </div>
+</div>
+
+<!-- CHAT -->
+<div class="scr" id="scr-chat">
+  <div class="cw">
+    <div class="cm" id="chatMessages">
+      <div class="msg ma">Привет! Я знаю что у тебя в холодильнике, твои цели и предпочтения. Спрашивай что угодно — подробный рецепт, чем заменить ингредиент, что приготовить из остатков, вопросы про нутриенты, пожелания к конкретному дню меню. Просто напиши!</div>
+    </div>
+    <div class="cf">
+      <textarea id="chatInput" placeholder="Напиши пожелание..." rows="1" oninput="autoR(this)" onkeydown="chatKey(event)"></textarea>
+      <button class="sb2" onclick="sendChat()">↑</button>
+    </div>
+  </div>
+</div>
+
+<!-- TIPS -->
+<div class="scr" id="scr-tips">
+  <div class="si" id="tipsContent">
+    <div class="es">
+      <div class="ei">💡</div>
+      <div class="ett">Рекомендации по питанию</div>
+      <div class="es2">Claude проанализирует продукты, цели, историю Yazio и данные ЖКТ — и даст персональные советы.</div>
+      <button class="bp" onclick="loadTips()">Получить рекомендации</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="scr" id="scr-settings">
+  <div class="si">
+    <div class="card">
+      <div class="ct">API ключ Claude</div>
+      <div class="nr" style="margin-bottom:9px;font-size:11px">Хранится только на этом устройстве. Получи на console.anthropic.com → API Keys</div>
+      <input type="password" id="s-apikey" placeholder="sk-ant-...">
+    </div>
+    <div class="card">
+      <div class="ct">Приёмы пищи и тренировки</div>
+      <div class="ig">
+        <label class="il">Количество приёмов пищи в день</label>
+        <div class="mc-row">
+          <button class="mc-btn sel" id="mc-2" onclick="setMC(2,this)">2 приёма</button>
+          <button class="mc-btn" id="mc-3" onclick="setMC(3,this)">3 приёма</button>
+          <button class="mc-btn" id="mc-4" onclick="setMC(4,this)">4 (+ перекус)</button>
+        </div>
+      </div>
+      <div class="ig" style="margin-bottom:4px">
+        <label class="il">Дни тренировок</label>
+        <div class="wd-grid" id="wdGrid"></div>
+      </div>
+      <div class="ig">
+        <label class="il">Время тренировки (примерно)</label>
+        <input type="text" id="s-wtime" placeholder="18:00">
+      </div>
+    </div>
+    <div class="card">
+      <div class="ct">КБЖУ (цели в день)</div>
+      <div class="ir">
+        <div class="ig"><label class="il">Калории</label><input type="number" id="s-kcal" value="2000"></div>
+        <div class="ig"><label class="il">Белки (г)</label><input type="number" id="s-prot" value="120"></div>
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">Жиры (г)</label><input type="number" id="s-fat" value="65"></div>
+        <div class="ig"><label class="il">Углеводы (г)</label><input type="number" id="s-carb" value="220"></div>
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">Клетчатка (г)</label><input type="number" id="s-fiber" value="30"></div>
+        <div class="ig"><label class="il">Нас./ненас. ЖК (%)</label><input type="text" id="s-fa" value="30/70"></div>
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">Слож./прост. углев. (%)</label><input type="text" id="s-ca" value="70/30"></div>
+        <div class="ig"></div>
+      </div>
+      <button class="bs" onclick="toCalc()" style="margin-top:6px">🧮 Калькулятор КБЖУ</button>
+    </div>
+    <div class="card">
+      <div class="ct">Постоянные пожелания</div>
+      <textarea id="s-prefs" placeholder="Например: каждый день что-то сладкое, не люблю лук..."></textarea>
+    </div>
+    <div class="card">
+      <div class="ct">Синхронизация с Yazio</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">
+        Запусти <b>yazio_sync.py</b> на компьютере — он опубликует <b>yazio_data.json</b> на GitHub. Укажи свои данные ниже.
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">GitHub логин</label><input type="text" id="s-ghuser" placeholder="твой_логин"></div>
+        <div class="ig"><label class="il">Репозиторий</label><input type="text" id="s-ghrepo" placeholder="nutrition"></div>
+      </div>
+      <div id="yazioInfo"></div>
+      <button class="bs" onclick="loadYazio()" style="margin-top:4px">↺ Загрузить данные Yazio</button>
+    </div>
+    <button class="bp" onclick="saveSettings()">Сохранить</button>
+    <button class="bs" onclick="generateWeekMenu()">↺ Пересоставить меню</button>
+    <button class="bs" onclick="clearMenu()" style="color:var(--acc);border-color:rgba(233,69,96,0.3)">Сбросить меню</button>
+  </div>
+</div>
+
+<!-- CALC -->
+<div class="scr" id="scr-calc">
+  <div class="si">
+    <div class="card">
+      <div class="ct">Параметры</div>
+      <div class="ir">
+        <div class="ig"><label class="il">Пол</label>
+          <select id="c-sex"><option value="f">Женский</option><option value="m">Мужской</option></select>
+        </div>
+        <div class="ig"><label class="il">Возраст</label><input type="number" id="c-age" placeholder="30"></div>
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">Рост (см)</label><input type="number" id="c-h" placeholder="165"></div>
+        <div class="ig"><label class="il">Вес (кг)</label><input type="number" id="c-w" placeholder="60"></div>
+      </div>
+      <div class="ig"><label class="il">% жира (необязательно, для точности)</label><input type="number" id="c-bf" placeholder="оставь пустым если не знаешь"></div>
+      <div class="ig"><label class="il">Активность</label>
+        <select id="c-act">
+          <option value="1.2">Сидячий образ жизни</option>
+          <option value="1.375">Лёгкая (1-3 раза/нед)</option>
+          <option value="1.55" selected>Умеренная (3-5 раз/нед)</option>
+          <option value="1.725">Высокая (6-7 раз/нед)</option>
+          <option value="1.9">Очень высокая (2×/день)</option>
+        </select>
+      </div>
+      <div class="ig"><label class="il">Цель</label>
+        <select id="c-goal">
+          <option value="maintain">Поддержание веса</option>
+          <option value="cut">Снижение жировой массы</option>
+          <option value="bulk">Набор мышечной массы</option>
+        </select>
+      </div>
+      <div class="ig"><label class="il">Интенсивность</label>
+        <select id="c-int">
+          <option value="mild">Мягкая (±10%)</option>
+          <option value="moderate" selected>Умеренная (±20%)</option>
+          <option value="aggressive">Агрессивная (±30%)</option>
+        </select>
+      </div>
+    </div>
+    <button class="bp" onclick="calcMacros()">Рассчитать</button>
+    <div id="calcResult"></div>
+  </div>
+</div>
+
+<!-- ADD PRODUCT -->
+<div class="scr" id="scr-add-product">
+  <div class="si">
+    <div class="card">
+      <div class="pz" onclick="document.getElementById('photoInput').click()">
+        <div class="ph">📷</div>
+        <div class="pt">Сфотографировать упаковку<br><span style="font-size:10px;opacity:0.6">Claude распознает название, КБЖУ и срок годности</span></div>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="processPhoto(event)">
+      </div>
+      <div id="photoPreview" style="display:none;margin-bottom:12px">
+        <img id="previewImg" style="width:100%;border-radius:9px;max-height:160px;object-fit:cover">
+        <div id="recStatus" style="text-align:center;padding:7px;font-size:12px;color:var(--text2)"></div>
+      </div>
+      <div class="ig"><label class="il">Название *</label><input type="text" id="p-name" placeholder="Куриная грудка"></div>
+      <div class="ir">
+        <div class="ig"><label class="il">Вес (г)</label><input type="number" id="p-weight" placeholder="500"></div>
+        <div class="ig"><label class="il">Срок годности</label><input type="text" id="p-expiry" placeholder="31.12.2025"></div>
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">Ккал/100г</label><input type="number" id="p-kcal" placeholder="165"></div>
+        <div class="ig"><label class="il">Белки/100г</label><input type="number" id="p-prot" placeholder="31"></div>
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">Жиры/100г</label><input type="number" id="p-fat" placeholder="3.6"></div>
+        <div class="ig"><label class="il">Углев./100г</label><input type="number" id="p-carb" placeholder="0"></div>
+      </div>
+      <button class="bp" onclick="addProduct()" style="margin-top:4px">Добавить в холодильник</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD DISH -->
+<div class="scr" id="scr-add-dish">
+  <div class="si">
+    <div class="card">
+      <div class="ig"><label class="il">Название *</label><input type="text" id="d-name" placeholder="Гречка с курицей"></div>
+      <div class="ig"><label class="il">Ингредиенты</label>
+        <textarea id="d-ing" placeholder="Гречка 150г, курица 200г, оливковое масло 10г..." style="min-height:65px"></textarea>
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">Ккал</label><input type="number" id="d-kcal" placeholder="450"></div>
+        <div class="ig"><label class="il">Белки (г)</label><input type="number" id="d-prot" placeholder="40"></div>
+      </div>
+      <div class="ir">
+        <div class="ig"><label class="il">Жиры (г)</label><input type="number" id="d-fat" placeholder="12"></div>
+        <div class="ig"><label class="il">Углев. (г)</label><input type="number" id="d-carb" placeholder="45"></div>
+      </div>
+      <div class="ig"><label class="il">Заметка</label><input type="text" id="d-note" placeholder="Люблю с соевым соусом"></div>
+      <button class="bp" onclick="addDish()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- GUT MANUAL -->
+<div class="scr" id="scr-gut-manual">
+  <div class="si">
+    <div class="card">
+      <div class="ct">Оценка состояния ЖКТ</div>
+      <div class="ig"><label class="il">После какого приёма пищи?</label>
+        <input type="text" id="gm-meal" placeholder="Завтрак, обед...">
+      </div>
+      <div class="ig"><label class="il">Статус</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button id="gst-ok" onclick="setGutStatus('ok')" style="flex:1;padding:10px;border-radius:9px;border:0.5px solid rgba(74,222,128,0.4);background:none;color:#4ade80;font-size:13px;cursor:pointer">✓ Всё ок</button>
+          <button id="gst-bad" onclick="setGutStatus('bad')" style="flex:1;padding:10px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:13px;cursor:pointer">⚠ Дискомфорт</button>
+        </div>
+      </div>
+      <div class="ig" id="gutNoteWrap" style="display:none">
+        <label class="il">Что именно (вздутие, тяжесть, изжога...)</label>
+        <textarea id="gm-note" placeholder="Опиши симптомы..." style="min-height:65px"></textarea>
+      </div>
+      <div class="ig"><label class="il">Время</label>
+        <input type="text" id="gm-time" placeholder="14:30">
+      </div>
+      <button class="bp" onclick="saveGutEntry()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- DAY DETAIL -->
+<div class="scr" id="scr-day-detail">
+  <div class="si" id="dayDetailContent"></div>
+</div>
+
+<script>
+const DAYS=['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
+const DS=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const ALL_MEALS=['Завтрак','Обед','Ужин','Перекус'];
+
+let S={
+  products:[],menu:null,shopping:[],shoppingChecked:{},
+  settings:{
+    kcal:2000,prot:120,fat:65,carb:220,fiber:30,
+    fa:'30/70',ca:'70/30',prefs:'',apikey:'',
+    mealCount:2,workoutDays:[],workoutTime:'18:00'
+  },
+  chatHistory:[],wishes:[],
+  dishes:[],dishFilter:'all',
+  gutLog:[],     // {id,date,meal,status:'ok'|'bad',note,time}
+  gutPending:null, // {dayIdx,mealType} — ожидает оценки
+  yazioData:null,
+  prevScreen:'menu',currentDayIdx:null
+};
+
+function load(){try{const d=localStorage.getItem('np_v4');if(d)S=Object.assign(S,JSON.parse(d));}catch(e){}}
+function save(){try{localStorage.setItem('np_v4',JSON.stringify(S));}catch(e){}}
+
+/* ── API ── */
+async function claude(messages,system,maxTok){
+  const k=S.settings.apikey;if(!k)return null;
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTok||2000,system:system||'',messages})
+    });
+    if(!r.ok){const e=await r.json();return{error:e.error?.message||'Ошибка API'};}
+    return(await r.json()).content?.[0]?.text||null;
+  }catch(e){return{error:'Нет соединения'};}
+}
+
+/* ── NAV ── */
+function show(name){document.querySelectorAll('.scr').forEach(s=>s.classList.remove('active'));document.getElementById('scr-'+name)?.classList.add('active');}
+
+function switchNav(name,btn){
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  document.getElementById('backBtn').style.display='none';
+  document.getElementById('mainNav').style.display='flex';
+  document.getElementById('refreshBtn').style.display=name==='menu'?'flex':'none';
+  document.getElementById('hTitle').textContent='Моё питание';
+  show(name);
+  if(name==='products')renderProducts();
+  if(name==='menu')renderMenu();
+  if(name==='dishes')renderDishes();
+  if(name==='gut')renderGut();
+}
+
+function subScreen(name,title,prev){
+  S.prevScreen=prev||curNav()||'menu';
+  document.getElementById('backBtn').style.display='block';
+  document.getElementById('mainNav').style.display='none';
+  document.getElementById('refreshBtn').style.display='none';
+  document.getElementById('hTitle').textContent=title;
+  show(name);
+}
+
+function switchToSettings(){subScreen('settings','Настройки',curNav()||'menu');}
+function toCalc(){subScreen('calc','Калькулятор КБЖУ','settings');}
+function showAddProduct(){clearPForm();subScreen('add-product','Добавить продукт','products');}
+function showAddDish(){clearDForm();subScreen('add-dish','Добавить блюдо','dishes');}
+function showGutManual(){
+  document.getElementById('gm-meal').value='';
+  document.getElementById('gm-note').value='';
+  document.getElementById('gm-time').value=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  setGutStatus('ok');
+  subScreen('gut-manual','Состояние ЖКТ','gut');
+}
+
+function goBack(){
+  document.getElementById('backBtn').style.display='none';
+  document.getElementById('mainNav').style.display='flex';
+  document.getElementById('hTitle').textContent='Моё питание';
+  const prev=S.prevScreen||'menu';
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  const nb=document.getElementById('nav-'+prev);if(nb)nb.classList.add('active');
+  document.getElementById('refreshBtn').style.display=prev==='menu'?'flex':'none';
+  if(prev==='settings'){document.getElementById('hTitle').textContent='Настройки';document.getElementById('refreshBtn').style.display='none';}
+  show(prev);
+  if(prev==='products')renderProducts();
+  if(prev==='menu')renderMenu();
+  if(prev==='dishes')renderDishes();
+  if(prev==='gut')renderGut();
+}
+
+function curNav(){const a=document.querySelector('.nb.active');return a?a.id.replace('nav-',''):'menu';}
+
+/* ── WEEK ── */
+function weekDays(){
+  const t=new Date(),dow=t.getDay(),mon=new Date(t);
+  mon.setDate(t.getDate()-(dow===0?6:dow-1));
+  return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);
+    return{date:d,label:DAYS[i],short:DS[i],str:d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})};});
+}
+function isToday(d){const t=new Date();return d.getDate()===t.getDate()&&d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear();}
+function isPast(d){const t=new Date();t.setHours(0,0,0,0);return d<t;}
+function expSt(s){if(!s)return'ok';const diff=(new Date(s)-new Date())/864e5;if(diff<0)return'bad';if(diff<3)return'warn';return'ok';}
+function fmtExp(s){if(!s)return'—';return new Date(s).toLocaleDateString('ru-RU',{day:'numeric',month:'short'});}
+function parseExp(s){if(!s)return null;const p=s.split('.');if(p.length===3&&p[2].length===4)return`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;return s;}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function getMeals(){
+  const n=S.settings.mealCount||2;
+  if(n===2)return['Завтрак','Ужин'];
+  if(n===3)return['Завтрак','Обед','Ужин'];
+  return['Завтрак','Обед','Ужин','Перекус'];
+}
+
+function isWorkoutDay(dayIdx){return(S.settings.workoutDays||[]).includes(dayIdx);}
+
+/* ── RENDER MENU ── */
+function renderMenu(){
+  const el=document.getElementById('menuContent');
+  // Проверяем нужно ли показать ЖКТ-pending
+  checkGutPending();
+  if(!S.menu){
+    el.innerHTML=`<div class="es"><div class="ei">📅</div><div class="ett">Меню не составлено</div><div class="es2">Добавь продукты в холодильник, затем нажми кнопку.</div><button class="bp" onclick="generateWeekMenu()">Составить меню на неделю</button></div>`;
+    return;
+  }
+  const days=weekDays();const meals=getMeals();
+  let html='';
+  days.forEach((d,i)=>{
+    const dm=S.menu[i]||{};const tod=isToday(d.date);const past=isPast(d.date)&&!tod;const wo=isWorkoutDay(i);
+    // ЖКТ за день
+    const gutDay=S.gutLog.filter(g=>g.date===d.date.toISOString().split('T')[0]);
+    const hasBad=gutDay.some(g=>g.status==='bad');
+    html+=`<div class="dc${tod?' today':''}${past?' past':''}${wo?' workout':''}" onclick="showDay(${i})">
+      <div class="dh">
+        <span class="dn">${d.short}${tod?', сегодня':''}</span>
+        <span class="dd">${d.str}</span>
+        <div style="display:flex;gap:4px">
+          ${tod?'<span class="dbg dbg-today">сегодня</span>':''}
+          ${wo?'<span class="dbg dbg-wo">💪 тренировка</span>':''}
+        </div>
+      </div>
+      <div>`;
+    meals.forEach(t=>{const m=dm[t];if(m)html+=`<div class="ml2"><span class="mt2">${t}</span><span>${esc(m.name)}</span></div>`;});
+    if(dm.macros){const m=dm.macros;const g=S.settings;
+      html+=`<div class="mr2">
+        <div style="flex:1;text-align:center"><div class="mv">${m.kcal||0}</div><div class="mlb">ккал</div><div class="pb"><div class="pf" style="width:${Math.min(100,Math.round((m.kcal||0)/g.kcal*100))}%;background:var(--acc2)"></div></div></div>
+        <div style="flex:1;text-align:center"><div class="mv">${m.prot||0}г</div><div class="mlb">белки</div><div class="pb"><div class="pf" style="width:${Math.min(100,Math.round((m.prot||0)/g.prot*100))}%;background:#4ade80"></div></div></div>
+        <div style="flex:1;text-align:center"><div class="mv">${m.fat||0}г</div><div class="mlb">жиры</div><div class="pb"><div class="pf" style="width:${Math.min(100,Math.round((m.fat||0)/g.fat*100))}%;background:var(--acc)"></div></div></div>
+        <div style="flex:1;text-align:center"><div class="mv">${m.carb||0}г</div><div class="mlb">углев.</div><div class="pb"><div class="pf" style="width:${Math.min(100,Math.round((m.carb||0)/g.carb*100))}%;background:#818cf8"></div></div></div>
+      </div>`;}
+    if(gutDay.length){html+=`<div class="${hasBad?'gut-bad':'gut-ok'}">${hasBad?'⚠ Дискомфорт':'✓ ЖКТ ок'}</div>`;}
+    html+=`</div></div>`;
+  });
+  el.innerHTML=html;
+}
+
+/* ── RENDER PRODUCTS ── */
+function renderProducts(){
+  const el=document.getElementById('productsList');
+  if(!S.products.length){el.innerHTML='<p style="font-size:12px;color:var(--text2);padding:6px 0">Холодильник пуст.</p>';return;}
+  const sorted=[...S.products].sort((a,b)=>{if(!a.expiry&&!b.expiry)return 0;if(!a.expiry)return 1;if(!b.expiry)return-1;return new Date(a.expiry)-new Date(b.expiry);});
+  el.innerHTML=sorted.map(p=>{const st=expSt(p.expiry);
+    return`<div class="pi">
+      <div class="pico">${p.icon||'🥗'}</div>
+      <div class="pinf"><div class="pnm">${esc(p.name)}</div><div class="pmt">${p.weight?p.weight+'г · ':''}${p.kcal?p.kcal+' ккал/100г':''}</div></div>
+      <div style="text-align:right;flex-shrink:0;margin-right:3px">
+        <div class="e${st}" style="font-size:11px">${fmtExp(p.expiry)}</div>
+        <div style="font-size:9px;color:var(--text2)">${st==='bad'?'просрочен':st==='warn'?'скоро':''}</div>
+      </div>
+      <button class="xb" onclick="delProduct(${p.id},event)">×</button>
+    </div>`;}).join('');
+  const sc=document.getElementById('shoppingCard'),sl=document.getElementById('shoppingList');
+  if(S.shopping?.length){
+    sc.style.display='block';
+    sl.innerHTML=S.shopping.map((item,i)=>`<div class="pi">
+      <div class="pico" onclick="toggleShop(${i},this)" style="cursor:pointer;font-size:14px">${S.shoppingChecked?.[i]?'✓':'○'}</div>
+      <span style="font-size:13px">${esc(item)}</span>
+    </div>`).join('');
+  }else sc.style.display='none';
+}
+function delProduct(id,e){e.stopPropagation();if(!confirm('Удалить?'))return;S.products=S.products.filter(p=>p.id!==id);save();renderProducts();}
+function toggleShop(i,el){if(!S.shoppingChecked)S.shoppingChecked={};S.shoppingChecked[i]=!S.shoppingChecked[i];el.textContent=S.shoppingChecked[i]?'✓':'○';save();}
+
+/* ── DISHES ── */
+function setDF(f,btn){
+  S.dishFilter=f;
+  document.querySelectorAll('[id^="df-"]').forEach(b=>{b.style.borderColor='var(--cb)';b.style.color='var(--text2)';});
+  btn.style.borderColor='var(--acc)';btn.style.color='var(--acc)';
+  renderDishes();
+}
+function renderDishes(){
+  const el=document.getElementById('dishesList');
+  const q=(document.getElementById('dishSearch')?.value||'').toLowerCase();
+  let list=[...S.dishes];
+  if(S.dishFilter==='liked')list=list.filter(d=>d.liked);
+  else if(S.dishFilter==='dis')list=list.filter(d=>d.disliked);
+  if(q)list=list.filter(d=>d.name.toLowerCase().includes(q));
+  list.sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+  if(!list.length){el.innerHTML='<p style="font-size:12px;color:var(--text2);padding:6px 0">Нет блюд.</p>';return;}
+  el.innerHTML=list.map(d=>`<div class="dii">
+    <div class="dii-inf">
+      <div class="dii-nm">${esc(d.name)}</div>
+      <div class="dii-mt">${d.kcal?d.kcal+' ккал':''}${d.note?' · '+esc(d.note.substring(0,30)):''}</div>
+    </div>
+    <button class="lk" onclick="toggleLike(${d.id},event)">${d.liked?'❤':'🤍'}</button>
+    <button class="lk" onclick="toggleDis(${d.id},event)">${d.disliked?'👎':'👍'}</button>
+    <button class="xb" onclick="delDish(${d.id},event)">×</button>
+  </div>`).join('');
+}
+function toggleLike(id,e){e.stopPropagation();const d=S.dishes.find(x=>x.id===id);if(!d)return;d.liked=!d.liked;if(d.liked)d.disliked=false;save();renderDishes();}
+function toggleDis(id,e){e.stopPropagation();const d=S.dishes.find(x=>x.id===id);if(!d)return;d.disliked=!d.disliked;if(d.disliked)d.liked=false;save();renderDishes();}
+function delDish(id,e){e.stopPropagation();if(!confirm('Удалить?'))return;S.dishes=S.dishes.filter(d=>d.id!==id);save();renderDishes();}
+function addDish(){
+  const name=document.getElementById('d-name').value.trim();if(!name){alert('Укажи название');return;}
+  if(S.dishes.find(d=>d.name.toLowerCase()===name.toLowerCase())){alert('Уже есть');return;}
+  S.dishes.push({id:Date.now(),name,ingredients:document.getElementById('d-ing').value.trim(),
+    kcal:parseFloat(document.getElementById('d-kcal').value)||0,prot:parseFloat(document.getElementById('d-prot').value)||0,
+    fat:parseFloat(document.getElementById('d-fat').value)||0,carb:parseFloat(document.getElementById('d-carb').value)||0,
+    note:document.getElementById('d-note').value.trim(),liked:true,disliked:false});
+  save();goBack();
+}
+function clearDForm(){['d-name','d-ing','d-kcal','d-prot','d-fat','d-carb','d-note'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
+function dishFromMenu(name,kcal,prot,fat,carb){
+  if(!S.dishes.find(d=>d.name.toLowerCase()===name.toLowerCase())){
+    S.dishes.push({id:Date.now()+Math.random(),name,ingredients:'',kcal,prot,fat,carb,note:'',liked:true,disliked:false});save();
+  }
+}
+function dislikeMenu(name){
+  let d=S.dishes.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  if(!d){d={id:Date.now(),name,ingredients:'',kcal:0,prot:0,fat:0,carb:0,note:'',liked:false,disliked:true};S.dishes.push(d);}
+  else{d.disliked=true;d.liked=false;}
+  save();alert('Добавлено в стоп-лист.');
+}
+
+/* ── GUT TRACKER ── */
+let gutStatusSel='ok';
+function setGutStatus(s){
+  gutStatusSel=s;
+  document.getElementById('gst-ok').style.background=s==='ok'?'rgba(74,222,128,0.15)':'none';
+  document.getElementById('gst-ok').style.color=s==='ok'?'#4ade80':'var(--text2)';
+  document.getElementById('gst-bad').style.background=s==='bad'?'rgba(233,69,96,0.12)':'none';
+  document.getElementById('gst-bad').style.color=s==='bad'?'var(--acc)':'var(--text2)';
+  document.getElementById('gst-bad').style.borderColor=s==='bad'?'rgba(233,69,96,0.4)':'var(--cb)';
+  document.getElementById('gutNoteWrap').style.display=s==='bad'?'block':'none';
+}
+
+function saveGutEntry(){
+  const meal=document.getElementById('gm-meal').value.trim();
+  const note=document.getElementById('gm-note').value.trim();
+  const time=document.getElementById('gm-time').value.trim();
+  const today=new Date().toISOString().split('T')[0];
+  S.gutLog.push({id:Date.now(),date:today,meal:meal||'—',status:gutStatusSel,note,time});
+  save();
+  // Если было дискомфорт — сразу предложить анализ
+  if(gutStatusSel==='bad'){
+    goBack();
+    setTimeout(()=>analyzeGut(),300);
+  }else{
+    goBack();
+  }
+}
+
+function checkGutPending(){
+  // Показываем запрос оценки если последний приём пищи был 2+ часа назад
+  // и ещё нет оценки за этот приём сегодня
+  const today=new Date().toISOString().split('T')[0];
+  const meals=getMeals();
+  const wt=S.settings.workoutTime||'18:00';
+  const now=new Date();
+  const pend=document.getElementById('gutPending');
+  if(!pend)return;
+
+  // Находим последний приём пищи который мог закончиться 2+ часа назад
+  // Простая логика: завтрак ~8:00, обед ~13:00, ужин ~19:00
+  const mealTimes={Завтрак:8,Обед:13,Ужин:19,Перекус:16};
+  const nowH=now.getHours()+now.getMinutes()/60;
+  let pendingMeal=null;
+  for(const m of meals){
+    const t=mealTimes[m]||12;
+    if(nowH>=t+2){
+      const alreadyLogged=S.gutLog.some(g=>g.date===today&&g.meal===m);
+      if(!alreadyLogged)pendingMeal=m;
+    }
+  }
+  if(pendingMeal){
+    pend.style.display='block';
+    pend.innerHTML=`<div class="card" style="border-color:rgba(129,140,248,0.4)">
+      <div style="font-size:13px;margin-bottom:10px">Как самочувствие после <b>${pendingMeal}</b>?</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="quickGut('${pendingMeal}','ok')" style="flex:1;padding:10px;border-radius:9px;border:0.5px solid rgba(74,222,128,0.4);background:none;color:#4ade80;font-size:13px;cursor:pointer">✓ Всё ок</button>
+        <button onclick="quickGut('${pendingMeal}','bad')" style="flex:1;padding:10px;border-radius:9px;border:0.5px solid rgba(233,69,96,0.4);background:none;color:var(--acc);font-size:13px;cursor:pointer">⚠ Дискомфорт</button>
+      </div>
+    </div>`;
+  }else{pend.style.display='none';}
+}
+
+function quickGut(meal,status){
+  if(status==='bad'){
+    // Открываем форму с заполненным блюдом
+    document.getElementById('gm-meal').value=meal;
+    document.getElementById('gm-time').value=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+    setGutStatus('bad');
+    subScreen('gut-manual','Состояние ЖКТ','menu');
+  }else{
+    const today=new Date().toISOString().split('T')[0];
+    S.gutLog.push({id:Date.now(),date:today,meal,status:'ok',note:'',time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
+    save();
+    document.getElementById('gutPending').style.display='none';
+  }
+}
+
+function renderGut(){
+  const el=document.getElementById('gutHistory');
+  const sorted=[...S.gutLog].sort((a,b)=>b.id-a.id).slice(0,30);
+  if(!sorted.length){el.innerHTML='<p style="font-size:12px;color:var(--text2)">Записей пока нет.</p>';return;}
+  el.innerHTML=sorted.map(g=>`<div class="gut-entry">
+    <div class="gut-time">${g.date} ${g.time?'· '+g.time:''} · ${g.meal}</div>
+    <div class="gut-text ${g.status==='ok'?'gut-status-ok':'gut-status-bad'}">${g.status==='ok'?'✓ Всё ок':'⚠ '+esc(g.note||'Дискомфорт')}</div>
+  </div>`).join('');
+}
+
+async function analyzeGut(){
+  if(!S.settings.apikey){alert('Укажи API ключ');return;}
+  const card=document.getElementById('gutAnalysisCard');
+  const el=document.getElementById('gutAnalysis');
+  card.style.display='block';
+  el.innerHTML='<span class="spin"></span> Анализирую...';
+
+  const badEntries=S.gutLog.filter(g=>g.status==='bad').slice(-20);
+  if(!badEntries.length){el.innerHTML='Записей о дискомфорте пока нет.';return;}
+
+  const log=badEntries.map(g=>`${g.date} после ${g.meal}: ${g.note}`).join('\n');
+  const products=S.products.map(p=>p.name).join(', ');
+  const resp=await claude([{role:'user',content:`Проанализируй записи о состоянии ЖКТ:
+${log}
+Продукты которые есть в холодильнике: ${products}
+Определи какие продукты или сочетания вероятнее всего вызывают дискомфорт, объясни почему, дай рекомендации. Пиши по-русски, конкретно.`}],
+  'Ты диетолог-гастроэнтеролог. По-русски, дружелюбно.',1000);
+  el.innerHTML=`<div style="font-size:13px;line-height:1.7;white-space:pre-wrap">${esc(resp||'Не удалось проанализировать.')}</div>`;
+  save();
+}
+
+/* ── DAY DETAIL ── */
+function showDay(idx){
+  S.currentDayIdx=idx;S.prevScreen='menu';
+  const days=weekDays();const d=days[idx];
+  document.getElementById('hTitle').textContent=`${d.label}, ${d.str}`;
+  document.getElementById('backBtn').style.display='block';
+  document.getElementById('mainNav').style.display='none';
+  document.getElementById('refreshBtn').style.display='none';
+  const dm=S.menu?.[idx]||{};const wo=isWorkoutDay(idx);const meals=getMeals();
+  let html='';
+  if(dm.warnings?.length){html+=`<div class="card">`;dm.warnings.forEach(w=>html+=`<div class="na">⚠ ${esc(w)}</div>`);html+=`</div>`;}
+  if(wo){
+    html+=`<div class="card" style="border-color:rgba(129,140,248,0.4)">
+      <div class="ct">💪 День тренировки</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.6">${esc(dm.workoutNote||'Питание скорректировано под тренировку: больше углеводов перед тренировкой, белок после.')}</div>
+    </div>`;
+  }
+  html+=`<div class="card"><div class="ct">Блюда дня</div>`;
+  meals.forEach(t=>{const m=dm[t];if(m){
+    const isPreWo=wo&&t===meals[0]; // первый приём — предтрен условно
+    html+=`<div class="dm">
+      <div class="dmh"><span class="dmn">${esc(m.name)}</span><span class="dmk">${m.kcal||0} ккал</span></div>
+      <div><span class="tag tg">Б: ${m.prot||0}г</span><span class="tag tr">Ж: ${m.fat||0}г</span><span class="tag tp">У: ${m.carb||0}г</span>${isPreWo?'<span class="tag tb">предтрен</span>':''}</div>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="dishFromMenu('${esc(m.name)}',${m.kcal||0},${m.prot||0},${m.fat||0},${m.carb||0});alert('Добавлено в любимые!')" style="font-size:10px;background:none;border:0.5px solid rgba(74,222,128,0.4);color:#4ade80;padding:3px 9px;border-radius:20px;cursor:pointer">❤ В любимые</button>
+        <button onclick="dislikeMenu('${esc(m.name)}')" style="font-size:10px;background:none;border:0.5px solid rgba(233,69,96,0.4);color:var(--acc);padding:3px 9px;border-radius:20px;cursor:pointer">👎 Не нравится</button>
+        <button onclick="logActual(${idx},'${esc(t)}')" style="font-size:10px;background:none;border:0.5px solid var(--cb);color:var(--text2);padding:3px 9px;border-radius:20px;cursor:pointer">✏ Факт. вес</button>
+        <button onclick="showRecipe('${esc(m.name)}','')" style="font-size:10px;background:none;border:0.5px solid rgba(245,166,35,0.4);color:var(--acc2);padding:3px 9px;border-radius:20px;cursor:pointer">📖 Рецепт</button>
+      </div>
+    </div>`;
+  }});
+  html+=`</div>`;
+  if(dm.reason)html+=`<div class="card"><div class="ct">Почему именно это?</div><div class="rb">${esc(dm.reason)}</div></div>`;
+  // ЖКТ за день
+  const dateStr=d.date.toISOString().split('T')[0];
+  const gutDay=S.gutLog.filter(g=>g.date===dateStr);
+  if(gutDay.length){
+    html+=`<div class="card"><div class="ct">ЖКТ за день</div>`;
+    gutDay.forEach(g=>html+=`<div class="gut-entry"><div class="gut-time">${g.time||''} · ${g.meal}</div><div class="gut-text ${g.status==='ok'?'gut-status-ok':'gut-status-bad'}">${g.status==='ok'?'✓ Ок':'⚠ '+esc(g.note)}</div></div>`);
+    html+=`</div>`;
+  }
+  html+=`<div class="card"><div class="ct">Скорректировать день</div>
+    <textarea id="dayWish" placeholder="Хочу пасту на обед, добавь яйца на завтрак..." style="margin-bottom:9px;min-height:60px"></textarea>
+    <button class="bp" id="adjBtn" onclick="adjustDay(${idx})">Пересоставить этот день</button>
+  </div>`;
+  document.getElementById('dayDetailContent').innerHTML=html;
+  show('day-detail');
+}
+
+function logActual(dayIdx,mealType){
+  const w=prompt(`Сколько граммов ты фактически съела на ${mealType}? (0 если не ела совсем)`);
+  if(w===null)return;
+  const grams=parseFloat(w)||0;
+  if(!S.menu[dayIdx])return;
+  const meal=S.menu[dayIdx][mealType];
+  if(!meal)return;
+  meal.actualGrams=grams;
+  // Вычитаем из продуктов (упрощённо — ищем по названию)
+  const ratio=grams/100;
+  // Записываем в лог что фактически потреблено
+  if(!S.menu[dayIdx].actualLog)S.menu[dayIdx].actualLog={};
+  S.menu[dayIdx].actualLog[mealType]=grams;
+  save();
+  alert(`Записано: ${grams}г. Остатки в холодильнике можно скорректировать вручную в разделе Продукты.`);
+}
+
+/* ── GENERATE MENU ── */
+async function generateWeekMenu(){
+  if(!S.settings.apikey){alert('Укажи API ключ (⚙)');switchToSettings();return;}
+  if(!S.products.length){alert('Добавь продукты в холодильник');return;}
+  document.getElementById('menuContent').innerHTML=`<div class="es"><div class="ei" style="font-size:36px">🍽</div><div class="ett"><span class="spin"></span>Составляю меню...</div><div class="es2">Учитываю КБЖУ, сроки годности, тренировки и твои предпочтения</div></div>`;
+  show('menu');
+  const g=S.settings;const today=new Date().toISOString().split('T')[0];
+  const meals=getMeals();const mealCount=meals.length;
+  const prods=S.products.map(p=>`• ${p.name}: ${p.weight||'?'}г, до ${p.expiry||'?'}, ${p.kcal||0}ккал/100г, Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}`).join('\n');
+  const liked=S.dishes.filter(d=>d.liked).map(d=>d.name).join(', ')||'нет';
+  const disliked=S.dishes.filter(d=>d.disliked).map(d=>d.name).join(', ')||'нет';
+  const woDays=S.settings.workoutDays?.map(i=>DS[i]).join(', ')||'нет';
+  const woTime=S.settings.workoutTime||'18:00';
+  const wishes=S.wishes.slice(-10).map(w=>`• ${w}`).join('\n');
+  const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-15).map(g=>`${g.meal}: ${g.note}`).join('; ')||'нет';
+  const yazio=S.yazioData?`Данные Yazio: средние за период — ${S.yazioData.summary?.avg_kcal||0}ккал, частые блюда: ${(S.yazioData.frequent_dishes||[]).slice(0,10).join(', ')}`:'';
+
+  const prompt=`Сегодня ${today}. Составь меню на текущую неделю (7 дней, 0=пн) из ТОЛЬКО имеющихся продуктов.
+Количество приёмов пищи в день: ${mealCount} (${meals.join(', ')}).
+
+ПРОДУКТЫ:
+${prods}
+
+ЦЕЛИ: ${g.kcal}ккал | Б${g.prot}г | Ж${g.fat}г | У${g.carb}г | клетчатка ${g.fiber}г
+Жиры нас./ненас.: ${g.fa} | Углеводы слож./прост.: ${g.ca}
+ЛЮБИМЫЕ блюда (включать чаще): ${liked}
+СТОП-ЛИСТ: ${disliked}
+ПОЖЕЛАНИЯ К ДНЯМ:
+${wishes||'нет'}
+ПОСТОЯННЫЕ ПОЖЕЛАНИЯ: ${g.prefs||'нет'}
+${yazio}
+
+ТРЕНИРОВКИ: дни ${woDays}, примерное время ${woTime}
+В дни тренировок:
+- За 2-3 часа до тренировки: больше сложных углеводов (предтрен)
+- В течение 30-60 мин после: белок + немного быстрых углеводов (посттрен)
+- Добавь в workoutNote объяснение структуры питания в этот день
+
+ПРОБЛЕМЫ С ЖКТ (эти продукты/сочетания вызывали дискомфорт — учти):
+${gutBad}
+
+НЮАНСЫ:
+- Жиры из круп усваиваются на 20-40% хуже — учти при расчёте
+- Скоропортящиеся — в начало недели
+- reason: 1-2 предложения о нутриентах/витаминах дня
+
+Ответь ТОЛЬКО JSON без markdown:
+{"days":[{"dayIndex":0,"meals":{"Завтрак":{"name":"Название (ингредиент1 XХг, ингредиент2 XXг)","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=3?',"Обед":{"name":"Название (ингредиент1 XXг, ...)","kcal":0,"prot":0,"fat":0,"carb":0}':''},"Ужин":{"name":"Название (ингредиент1 XXг, ...)","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=4?',"Перекус":{"name":"Название (ингредиент1 XXг, ...)","kcal":0,"prot":0,"fat":0,"carb":0}':''}},"macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"reason":"...","workoutNote":"...","warnings":[]}],"shopping":["..."]}`;
+
+  const resp=await claude([{role:'user',content:prompt}],'Ты диетолог-нутрициолог. Только JSON без markdown.',4000);
+  if(!resp||typeof resp==='object'){
+    document.getElementById('menuContent').innerHTML=`<div class="si"><div class="nr">${resp?.error||'Не удалось составить меню.'}</div><button class="bs" onclick="switchToSettings()">Настройки</button></div>`;return;
+  }
+  try{
+    const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
+    S.menu={};
+    data.days.forEach(d=>{S.menu[d.dayIndex]={...d.meals,macros:d.macros,reason:d.reason,workoutNote:d.workoutNote,warnings:d.warnings||[]};});
+    S.shopping=data.shopping||[];S.shoppingChecked={};
+    // Авто-добавление блюд в список
+    data.days.forEach(d=>{meals.forEach(t=>{const m=d.meals?.[t];if(m?.name&&!S.dishes.find(x=>x.name.toLowerCase()===m.name.toLowerCase())){S.dishes.push({id:Date.now()+Math.random(),name:m.name,ingredients:'',kcal:m.kcal||0,prot:m.prot||0,fat:m.fat||0,carb:m.carb||0,note:'',liked:false,disliked:false});}});});
+    save();renderMenu();
+  }catch(e){
+    document.getElementById('menuContent').innerHTML=`<div class="si"><div class="nr">Ошибка разбора ответа.</div><button class="bp" onclick="generateWeekMenu()">Повторить</button></div>`;
+  }
+}
+
+/* ── ADJUST DAY ── */
+async function adjustDay(idx){
+  const wish=document.getElementById('dayWish')?.value?.trim();if(!wish){alert('Напиши пожелание');return;}
+  const btn=document.getElementById('adjBtn');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>Пересоставляю...';}
+  const days=weekDays();const d=days[idx];const g=S.settings;const meals=getMeals();
+  const prods=S.products.map(p=>`${p.name}: до ${p.expiry||'?'}`).join(', ');
+  const disliked=S.dishes.filter(d=>d.disliked).map(d=>d.name).join(', ')||'нет';
+  const wo=isWorkoutDay(idx);
+  const remain=Object.entries(S.menu||{}).filter(([k])=>parseInt(k)>=idx).map(([k,v])=>`День ${k}: ${meals.map(t=>v[t]?`${t}: ${v[t].name}`:'').filter(Boolean).join(', ')}`).join('\n');
+  const resp=await claude([{role:'user',content:`Пользователь хочет изменить ${d.label} (день ${idx}).
+Пожелание: "${wish}"
+Продукты: ${prods}
+Стоп: ${disliked}
+Цели: ${g.kcal}ккал, Б${g.prot}/Ж${g.fat}/У${g.carb}г
+Приёмов пищи: ${meals.length} (${meals.join(', ')})
+${wo?`День тренировки! Время ~${g.workoutTime}. Учти предтрен/посттрен питание.`:''}
+Жиры из круп усваиваются на 20-40% хуже.
+Текущее меню с дня ${idx}:
+${remain}
+
+ЛОГИКА ОБРАБОТКИ ПОЖЕЛАНИЯ:
+1. Если пожелание вписывается в КБЖУ — просто включи в меню.
+2. Если не вписывается, но можно скорректировать день — предложи что убрать или уменьшить чтобы уложиться, добавь это в warnings.
+3. Если совсем не вписывается — честно скажи насколько выходит за рамки (в warnings), предложи варианты: облегчённую версию блюда, перенос на день тренировки (там можно больше калорий), или просто съесть без компенсации (одно отступление не ломает рацион). Не корректируй другие дни недели чтобы "отработать" — это нездоровый подход.
+
+Ответь ТОЛЬКО JSON: {"updatedDays":[{"dayIndex":${idx},"meals":{...},"macros":{...},"reason":"...","workoutNote":"...","warnings":[]}],"globalWarnings":[]}`}],
+  'Ты диетолог. Только JSON.',2000);
+  if(btn){btn.disabled=false;btn.innerHTML='Пересоставить этот день';}
+  if(!resp||typeof resp==='object'){alert('Ошибка: '+(resp?.error||'нет ответа'));return;}
+  try{
+    const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
+    data.updatedDays.forEach(ud=>{S.menu[ud.dayIndex]={...ud.meals,macros:ud.macros,reason:ud.reason,workoutNote:ud.workoutNote,warnings:ud.warnings||[]};});
+    S.wishes.push(`${d.label}: ${wish}`);save();
+    if(data.globalWarnings?.length)alert('⚠ '+data.globalWarnings.join('\n'));
+    showDay(idx);
+  }catch(e){alert('Ошибка разбора');}
+}
+
+/* ── CHAT ── */
+function autoR(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,85)+'px';}
+function chatKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}}
+async function sendChat(){
+  const inp=document.getElementById('chatInput');const text=inp.value.trim();if(!text)return;
+  inp.value='';inp.style.height='auto';
+  const msgs=document.getElementById('chatMessages');
+  msgs.innerHTML+=`<div class="msg mu">${esc(text)}</div>`;
+  const loading=document.createElement('div');loading.className='msg ma loading';loading.innerHTML='<span class="spin"></span>';
+  msgs.appendChild(loading);msgs.scrollTop=msgs.scrollHeight;
+  if(!S.settings.apikey){loading.textContent='Укажи API ключ в настройках.';loading.classList.remove('loading');return;}
+  S.chatHistory.push({role:'user',content:text});
+  const prods=S.products.map(p=>`${p.name} (до ${p.expiry||'?'})`).join(', ');
+  const liked=S.dishes.filter(d=>d.liked).map(d=>d.name).join(', ')||'нет';
+  const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-5).map(g=>g.note).filter(Boolean).join(', ')||'нет';
+  const resp=await claude(S.chatHistory,
+    `Ты персональный ассистент по питанию и кулинарии. Говори по-русски, дружелюбно.
+Контекст пользователя:
+- Продукты в холодильнике: ${prods||'нет данных'}
+- Цели: ${S.settings.kcal}ккал/день, Б${S.settings.prot}/Ж${S.settings.fat}/У${S.settings.carb}г
+- Любимые блюда: ${liked}
+- Проблемы с ЖКТ: ${gutBad}
+- Тренировки: ${(S.settings.workoutDays||[]).map(i=>['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i]).join(', ')||'нет'}
+
+Ты можешь помочь с чем угодно: подробный рецепт, замена ингредиента, вопросы про нутриенты, что приготовить из остатков, советы по готовке, пожелания к дням меню. Также можешь обсуждать психологическую сторону отношений с едой — эмоциональное заедание, чувство голода и насыщения, тревогу вокруг еды, пищевое поведение. Отвечай вдумчиво и без осуждения. Если тема требует работы со специалистом — скажи об этом мягко, но не отказывайся от разговора. Если пожелание к конкретному дню — подтверди и предупреди о возможных проблемах со сроками годности продуктов.`,1200);
+  if(resp&&typeof resp==='string'){
+    S.chatHistory.push({role:'assistant',content:resp});loading.textContent=resp;
+    if(text.match(/день|пн|вт|ср|чт|пт|сб|вс|понедел|вторн|среду|четверг|пятн|суббот|воскрес/i)){S.wishes.push(text);save();}
+  }else loading.textContent='Ошибка: '+(resp?.error||'нет ответа');
+  loading.classList.remove('loading');msgs.scrollTop=msgs.scrollHeight;
+}
+
+/* ── TIPS ── */
+async function loadTips(){
+  if(!S.settings.apikey){alert('Укажи API ключ (⚙)');switchToSettings();return;}
+  const el=document.getElementById('tipsContent');
+  el.innerHTML=`<div class="card" style="text-align:center;padding:24px"><span class="spin"></span><span style="color:var(--text2);font-size:13px">Анализирую...</span></div>`;
+  const g=S.settings;
+  const prods=S.products.map(p=>p.name).join(', ');
+  const gutBad=S.gutLog.filter(x=>x.status==='bad').slice(-10).map(x=>`${x.meal}: ${x.note}`).join('; ')||'нет';
+  const yazio=S.yazioData?`Данные из Yazio: средние ${S.yazioData.summary?.avg_kcal||0}ккал/день, частые блюда: ${(S.yazioData.frequent_dishes||[]).slice(0,10).join(', ')}`:'';
+  const resp=await claude([{role:'user',content:`Дай персональные рекомендации.
+Продукты: ${prods||'нет'}.
+Цели: ${g.kcal}ккал, Б${g.prot}/Ж${g.fat}/У${g.carb}, клетчатка ${g.fiber}г, жиры ${g.fa}, углеводы ${g.ca}.
+Тренировки: дни ${(g.workoutDays||[]).map(i=>DS[i]).join(',')||'нет'}, время ~${g.workoutTime}.
+Проблемы ЖКТ: ${gutBad}
+${yazio}
+Пожелания: ${g.prefs||'нет'}.
+Учти: жиры из круп усваиваются на 20-40% хуже.
+Включи: оценку продуктов, недостающие витамины/минералы, советы по питанию вокруг тренировок, рекомендации по ЖКТ. По-русски, живо.`}],
+  'Ты нутрициолог. По-русски дружелюбно.',1500);
+  const text=typeof resp==='string'?resp:(resp?.error||'Не удалось.');
+  el.innerHTML=`<div class="si"><div class="card"><div class="ct">Рекомендации</div><div style="font-size:13px;line-height:1.7;white-space:pre-wrap">${esc(text)}</div></div><button class="bs" onclick="loadTips()" style="margin:0 12px">↺ Обновить</button></div>`;
+}
+
+/* ── YAZIO ── */
+async function loadYazio(){
+  const g=S.settings;
+  if(!g.githubUser||!g.githubRepo){
+    const el=document.getElementById('yazioInfo');
+    if(el)el.innerHTML=`<div class="nr">Укажи GitHub логин и репозиторий выше, затем нажми Сохранить.</div>`;
+    return;
+  }
+  const url=`https://${g.githubUser}.github.io/${g.githubRepo}/yazio_data.json`;
+  const el=document.getElementById('yazioInfo');
+  if(el)el.innerHTML=`<div style="font-size:12px;color:var(--text2)"><span class="spin"></span> Загружаю...</div>`;
+  try{
+    const r=await fetch(url+'?t='+Date.now());
+    if(!r.ok)throw new Error('Файл не найден');
+    const data=await r.json();
+    S.yazioData=data;
+    (data.frequent_dishes||[]).forEach(name=>{
+      if(name&&!S.dishes.find(d=>d.name.toLowerCase()===name.toLowerCase())){
+        S.dishes.push({id:Date.now()+Math.random(),name,ingredients:'',kcal:0,prot:0,fat:0,carb:0,note:'из Yazio',liked:false,disliked:false});
+      }
+    });
+    save();
+    if(el)el.innerHTML=`<div class="yz-ok">✓ Синхронизировано ${new Date(data.synced_at).toLocaleDateString('ru-RU')} · ${data.frequent_dishes?.length||0} блюд · ср. ${data.summary?.avg_kcal||0} ккал/день</div>`;
+  }catch(e){
+    if(el)el.innerHTML=`<div class="nr">Не удалось загрузить. Проверь что yazio_sync.py запускался и данные верны.<br><small style="opacity:0.7">${url}</small></div>`;
+  }
+}
+
+/* ── RECIPE ── */
+async function showRecipe(mealName,ingredients){
+  if(!S.settings.apikey){alert('Укажи API ключ');return;}
+  // Открываем простой overlay поверх текущего экрана
+  let overlay=document.getElementById('recipeOverlay');
+  if(!overlay){
+    overlay=document.createElement('div');
+    overlay.id='recipeOverlay';
+    overlay.style.cssText='position:absolute;inset:0;background:rgba(26,26,46,0.97);z-index:50;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px';
+    document.querySelector('.app').appendChild(overlay);
+  }
+  overlay.style.display='flex';
+  overlay.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <button onclick="document.getElementById('recipeOverlay').style.display='none'" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;padding:0">←</button>
+      <span style="font-size:16px;font-weight:500">${esc(mealName)}</span>
+    </div>
+    <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px"><span class="spin"></span> Claude готовит рецепт...</div>`;
+
+  const prods=S.products.map(p=>`${p.name} ${p.weight}г`).join(', ');
+  const resp=await claude([{role:'user',content:`Напиши краткий рецепт для блюда "${mealName}".
+${ingredients?'Ингредиенты из базы: '+ingredients:'Продукты в холодильнике: '+prods}
+Формат: сначала список ингредиентов с граммовкой (подбери исходя из ${S.settings.kcal} ккал/день), затем пошаговое приготовление (3-6 шагов). Кратко и практично. По-русски.`}],
+  'Ты повар-диетолог. Краткие практичные рецепты по-русски.',800);
+
+  overlay.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <button onclick="document.getElementById('recipeOverlay').style.display='none'" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;padding:0">←</button>
+      <span style="font-size:16px;font-weight:500">${esc(mealName)}</span>
+    </div>
+    <div style="font-size:13px;line-height:1.8;white-space:pre-wrap;color:var(--text)">${esc(typeof resp==='string'?resp:'Не удалось загрузить рецепт.')}</div>
+    <button onclick="document.getElementById('recipeOverlay').style.display='none'" class="bs" style="margin-top:8px">Закрыть</button>`;
+}
+
+/* ── PHOTO ── */
+async function processPhoto(event){
+  const file=event.target.files[0];if(!file)return;
+  const preview=document.getElementById('photoPreview'),img=document.getElementById('previewImg'),status=document.getElementById('recStatus');
+  preview.style.display='block';img.src=URL.createObjectURL(file);
+  status.innerHTML='<span class="spin"></span> Распознаю...';
+  if(!S.settings.apikey){status.textContent='Укажи API ключ.';return;}
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    const b64=e.target.result.split(',')[1];
+    try{
+      const r=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':S.settings.apikey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:file.type,data:b64}},
+          {type:'text',text:'Фото продукта/упаковки. ТОЛЬКО JSON без markdown:\n{"name":"...","weight":число_или_null,"expiry":"YYYY-MM-DD или null","kcal":0,"prot":0,"fat":0,"carb":0,"icon":"emoji"}\nВес и срок — если видны на упаковке, иначе null. КБЖУ на 100г.'}
+        ]}]})
+      });
+      const d=await r.json();
+      const data=JSON.parse((d.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
+      if(data.name){
+        document.getElementById('p-name').value=data.name;
+        document.getElementById('p-weight').value=data.weight||'';
+        document.getElementById('p-expiry').value=data.expiry?new Date(data.expiry).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+        document.getElementById('p-kcal').value=data.kcal||'';document.getElementById('p-prot').value=data.prot||'';
+        document.getElementById('p-fat').value=data.fat||'';document.getElementById('p-carb').value=data.carb||'';
+        status.innerHTML='✓ Проверь и скорректируй';status.style.color='#4ade80';
+      }else status.textContent='Не удалось распознать. Заполни вручную.';
+    }catch(err){status.textContent='Ошибка. Заполни вручную.';}
+  };
+  reader.readAsDataURL(file);event.target.value='';
+}
+
+/* ── ADD PRODUCT ── */
+function clearPForm(){['p-name','p-weight','p-expiry','p-kcal','p-prot','p-fat','p-carb'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('photoPreview').style.display='none';}
+function addProduct(){
+  const name=document.getElementById('p-name').value.trim();if(!name){alert('Укажи название');return;}
+  S.products.push({id:Date.now(),name,weight:parseFloat(document.getElementById('p-weight').value)||0,
+    expiry:parseExp(document.getElementById('p-expiry').value),
+    kcal:parseFloat(document.getElementById('p-kcal').value)||0,prot:parseFloat(document.getElementById('p-prot').value)||0,
+    fat:parseFloat(document.getElementById('p-fat').value)||0,carb:parseFloat(document.getElementById('p-carb').value)||0,icon:'🥗'});
+  save();goBack();
+}
+
+/* ── SETTINGS ── */
+const WD_LABELS=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+function initWorkoutGrid(){
+  const grid=document.getElementById('wdGrid');if(!grid)return;
+  grid.innerHTML=WD_LABELS.map((l,i)=>`<button class="wd-btn${(S.settings.workoutDays||[]).includes(i)?' sel':''}" onclick="toggleWD(${i},this)">${l}</button>`).join('');
+}
+function toggleWD(i,btn){
+  if(!S.settings.workoutDays)S.settings.workoutDays=[];
+  const idx=S.settings.workoutDays.indexOf(i);
+  if(idx>=0)S.settings.workoutDays.splice(idx,1);
+  else S.settings.workoutDays.push(i);
+  btn.classList.toggle('sel');
+}
+function setMC(n,btn){
+  S.settings.mealCount=n;
+  document.querySelectorAll('.mc-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+function saveSettings(silent){
+  S.settings={
+    ...S.settings,
+    kcal:parseInt(document.getElementById('s-kcal').value)||2000,
+    prot:parseInt(document.getElementById('s-prot').value)||120,
+    fat:parseInt(document.getElementById('s-fat').value)||65,
+    carb:parseInt(document.getElementById('s-carb').value)||220,
+    fiber:parseInt(document.getElementById('s-fiber').value)||30,
+    fa:document.getElementById('s-fa').value||'30/70',
+    ca:document.getElementById('s-ca').value||'70/30',
+    prefs:document.getElementById('s-prefs').value||'',
+    apikey:document.getElementById('s-apikey').value||'',
+    workoutTime:document.getElementById('s-wtime').value||'18:00',
+    githubUser:document.getElementById('s-ghuser').value.trim()||'',
+    githubRepo:document.getElementById('s-ghrepo').value.trim()||'',
+  };
+  save();if(!silent)alert('Сохранено');
+}
+function clearMenu(){if(!confirm('Сбросить меню?'))return;S.menu=null;S.shopping=[];save();renderMenu();}
+
+/* ── CALCULATOR ── */
+function calcMacros(){
+  const sex=document.getElementById('c-sex').value;
+  const age=parseFloat(document.getElementById('c-age').value)||30;
+  const h=parseFloat(document.getElementById('c-h').value)||165;
+  const w=parseFloat(document.getElementById('c-w').value)||60;
+  const bf=parseFloat(document.getElementById('c-bf').value)||0;
+  const act=parseFloat(document.getElementById('c-act').value)||1.55;
+  const goal=document.getElementById('c-goal').value;
+  const intensity=document.getElementById('c-int').value;
+  let bmr=bf>0&&bf<60?370+21.6*w*(1-bf/100):(sex==='m'?10*w+6.25*h-5*age+5:10*w+6.25*h-5*age-161);
+  const tdee=Math.round(bmr*act);
+  let mod={mild:0.1,moderate:0.2,aggressive:0.3}[intensity]||0.2;
+  let kcal=goal==='maintain'?tdee:goal==='cut'?Math.round(tdee*(1-mod)):Math.round(tdee*(1+mod));
+  if(goal==='cut'&&kcal<(sex==='m'?1400:1200))kcal=sex==='m'?1400:1200;
+  if(goal==='bulk'&&kcal>tdee+800)kcal=tdee+800;
+  let prot=Math.min(goal==='bulk'?Math.round(w*2.2):goal==='cut'?Math.round(w*2.0):Math.round(w*1.8),Math.round(kcal*0.35/4));
+  const fat=Math.round(kcal*(goal==='cut'?0.25:0.30)/9);
+  const carb=Math.max(50,Math.round((kcal-prot*4-fat*9)/4));
+  const fiber=Math.round(kcal/1000*14);
+  const method=bf>0?'Katch-McArdle (учтён % жира)':'Mifflin-St Jeor';
+  document.getElementById('calcResult').innerHTML=`<div class="cr">
+    <div class="cmain">${kcal} ккал / день</div>
+    <div class="crow"><span class="clb">TDEE (поддержание)</span><span class="cvl">${tdee} ккал</span></div>
+    <div class="crow"><span class="clb">Белки</span><span class="cvl">${prot}г (${Math.round(prot*4/kcal*100)}%)</span></div>
+    <div class="crow"><span class="clb">Жиры</span><span class="cvl">${fat}г (${Math.round(fat*9/kcal*100)}%)</span></div>
+    <div class="crow"><span class="clb">Углеводы</span><span class="cvl">${carb}г (${Math.round(carb*4/kcal*100)}%)</span></div>
+    <div class="crow"><span class="clb">Клетчатка</span><span class="cvl">${fiber}г/день</span></div>
+    <div class="crow"><span class="clb">Жиры нас./ненас.</span><span class="cvl">30/70</span></div>
+    <div class="crow"><span class="clb">Углев. слож./прост.</span><span class="cvl">75/25</span></div>
+    <div class="crow" style="font-size:10px"><span class="clb">Метод</span><span class="cvl" style="color:var(--text2)">${method}</span></div>
+  </div>
+  <button class="bp" onclick="applyCalc(${kcal},${prot},${fat},${carb},${fiber})" style="margin-top:10px">Применить к настройкам</button>`;
+}
+function applyCalc(kcal,prot,fat,carb,fiber){
+  document.getElementById('s-kcal').value=kcal;document.getElementById('s-prot').value=prot;
+  document.getElementById('s-fat').value=fat;document.getElementById('s-carb').value=carb;
+  document.getElementById('s-fiber').value=fiber;
+  document.getElementById('s-fa').value='30/70';document.getElementById('s-ca').value='75/25';
+  saveSettings(true);goBack();alert('Параметры применены! Пересоставь меню.');
+}
+
+/* ── UTILS ── */
+function initSettingsUI(){
+  const fs=S.settings;
+  document.getElementById('s-kcal').value=fs.kcal||2000;
+  document.getElementById('s-prot').value=fs.prot||120;
+  document.getElementById('s-fat').value=fs.fat||65;
+  document.getElementById('s-carb').value=fs.carb||220;
+  document.getElementById('s-fiber').value=fs.fiber||30;
+  document.getElementById('s-fa').value=fs.fa||'30/70';
+  document.getElementById('s-ca').value=fs.ca||'70/30';
+  document.getElementById('s-prefs').value=fs.prefs||'';
+  document.getElementById('s-apikey').value=fs.apikey||'';
+  document.getElementById('s-wtime').value=fs.workoutTime||'18:00';
+  document.getElementById('s-ghuser').value=fs.githubUser||'';
+  document.getElementById('s-ghrepo').value=fs.githubRepo||'';
+  // Meal count buttons
+  document.querySelectorAll('.mc-btn').forEach(b=>b.classList.remove('sel'));
+  const mc=document.getElementById('mc-'+(fs.mealCount||2));
+  if(mc)mc.classList.add('sel');
+  initWorkoutGrid();
+  // Yazio info
+  if(S.yazioData){
+    const el=document.getElementById('yazioInfo');
+    if(el)el.innerHTML=`<div class="yz-ok">✓ Данные загружены: ${new Date(S.yazioData.synced_at).toLocaleDateString('ru-RU')} · ${S.yazioData.frequent_dishes?.length||0} блюд</div>`;
+  }
+}
+
+/* ── INIT ── */
+load();
+initSettingsUI();
+document.getElementById('refreshBtn').style.display='flex';
+renderMenu();
+// Подтягиваем Yazio при старте если есть настройки
+if(S.settings.apikey&&S.settings.githubUser)setTimeout(loadYazio,1500);
+
+if('serviceWorker'in navigator){window.addEventListener('load',()=>{
+  const sw=`const C='np-v4';self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll(['./']))));self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`;
+  navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'application/javascript'}))).catch(()=>{});
+});}
+</script>
+</body>
+</html>
