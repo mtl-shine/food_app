@@ -321,6 +321,8 @@ select option{background:#1a1a2e;color:var(--text)}
       </div>
       <div id="yazioInfo"></div>
       <button class="bs" onclick="loadYazio()" style="margin-top:4px">↺ Загрузить данные Yazio</button>
+      <button class="bs" onclick="startYazioDeepAnalysis()" style="margin-top:6px;border-color:rgba(129,140,248,0.4);color:#818cf8">🔬 Глубокий анализ истории (3 мес.)</button>
+      <button class="bs" onclick="showYazioProfile()" id="btnShowProfile" style="display:none;margin-top:6px">👤 Просмотреть профиль питания</button>
     </div>
     <button class="bp" onclick="saveSettings()">Сохранить</button>
     <button class="bs" onclick="generateWeekMenu()">↺ Пересоставить меню</button>
@@ -551,6 +553,49 @@ select option{background:#1a1a2e;color:var(--text)}
         <input type="text" id="gm-time" placeholder="14:30">
       </div>
       <button class="bp" onclick="saveGutEntry()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- YAZIO PROFILE -->
+<div class="scr" id="scr-yazio-profile">
+  <div class="si">
+    <div class="card" id="yp-patterns">
+      <div class="sh"><span class="ct" style="margin:0">Паттерны питания</span><button class="addb" onclick="editYazioSection('patterns')">✏</button></div>
+      <div id="yp-patterns-text" style="font-size:13px;color:var(--text2);line-height:1.7"></div>
+    </div>
+    <div class="card" id="yp-prefs">
+      <div class="sh"><span class="ct" style="margin:0">Предпочтения и вкусы</span><button class="addb" onclick="editYazioSection('prefs')">✏</button></div>
+      <div id="yp-prefs-text" style="font-size:13px;color:var(--text2);line-height:1.7"></div>
+    </div>
+    <div class="card">
+      <div class="sh"><span class="ct" style="margin:0">Любимые блюда и продукты</span><button class="addb" onclick="addAllFavFromProfile()">+ все в список</button></div>
+      <div id="yp-favs-list"></div>
+    </div>
+    <div class="card">
+      <div class="sh"><span class="ct" style="margin:0">Альтернативы</span><button class="addb" onclick="editYazioSection('alternatives')">✏</button></div>
+      <div id="yp-alt-text" style="font-size:13px;color:var(--text2);line-height:1.7"></div>
+    </div>
+    <div class="card" id="yp-concerns">
+      <div class="sh"><span class="ct" style="margin:0">Зоны внимания</span></div>
+      <div id="yp-concerns-text" style="font-size:13px;color:var(--text2);line-height:1.7"></div>
+    </div>
+    <div class="card" id="yp-recs" style="display:none">
+      <div class="ct">Рекомендации по рациону</div>
+      <div id="yp-recs-list"></div>
+    </div>
+    <button class="bp" onclick="saveYazioProfile()">Сохранить профиль</button>
+    <button class="bs" onclick="generateWeekMenu()" style="margin-top:8px">↺ Пересоставить меню с учётом профиля</button>
+  </div>
+</div>
+
+<!-- YAZIO SECTION EDIT -->
+<div class="scr" id="scr-yazio-edit">
+  <div class="si">
+    <div class="card">
+      <div class="ct" id="yazioEditTitle">Редактировать</div>
+      <textarea id="yazioEditArea" style="min-height:160px;margin-bottom:10px"></textarea>
+      <button class="bp" onclick="saveYazioSection()">Сохранить</button>
     </div>
   </div>
 </div>
@@ -1380,7 +1425,14 @@ async function generateWeekMenu(){
   const wishes=S.wishes.slice(-10).map(w=>`• ${w}`).join('\n');
   const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-15).map(g=>`${g.meal}: ${g.note}`).join('; ')||'нет';
   const yazio=S.yazioData?`Данные Yazio: средние за период — ${S.yazioData.summary?.avg_kcal||0}ккал, частые блюда: ${(S.yazioData.frequent_dishes||[]).slice(0,10).join(', ')}`:'';
-
+  const yazioProfile=S.yazioProfile?`
+ПРОФИЛЬ ПИТАНИЯ (основа для меню, использовать как приоритетный контекст):
+- Паттерны: ${S.yazioProfile.patterns||'нет данных'}
+- Предпочтения: ${S.yazioProfile.preferences||'нет данных'}
+- Любимые блюда/продукты: ${(S.yazioProfile.favorites||[]).join(', ')||'нет данных'}
+- Альтернативы скучным продуктам: ${S.yazioProfile.alternatives||'нет данных'}
+- Зоны внимания: ${S.yazioProfile.concerns||'нет данных'}`
+  :'';
   const prompt=`Сегодня ${today}. Составь меню на текущую неделю (7 дней, 0=пн) из ТОЛЬКО имеющихся продуктов.
 Количество приёмов пищи в день: ${mealCount} (${meals.join(', ')}).
 
@@ -1395,6 +1447,7 @@ ${prods}
 ${wishes||'нет'}
 ПОСТОЯННЫЕ ПОЖЕЛАНИЯ: ${g.prefs||'нет'}
 ${yazio}
+${yazioProfile}
 
 ТРЕНИРОВКИ: дни ${woDays}, примерное время ${woTime}
 В дни тренировок:
@@ -1501,6 +1554,33 @@ async function sendChat(){
   if(resp&&typeof resp==='string'){
     S.chatHistory.push({role:'assistant',content:resp});loading.textContent=resp;
     if(text.match(/день|пн|вт|ср|чт|пт|сб|вс|понедел|вторн|среду|четверг|пятн|суббот|воскрес/i)){S.wishes.push(text);save();}
+    // Распознаём запрос на перекус
+    if(text.match(/перекус|хочу есть|голод|проголодал|добавь.*перекус|лёгкий.*приём/i)){
+      const todayIdx=weekDays().findIndex(d=>isToday(d.date));
+      if(todayIdx>=0){
+        const meal=await addExtraMeal(todayIdx,'Перекус',text);
+        if(meal){
+          loading.textContent+=`\n\nДобавила перекус в сегодняшнее меню: ${meal.name} (~${meal.kcal}ккал).`;
+          renderMenu();
+        }
+      }
+      // Трекинг паттерна голода
+      if(!S.hungerLog)S.hungerLog=[];
+      S.hungerLog.push({date:new Date().toISOString(),text});
+      save();
+      // Если голод часто — предложить скорректировать КБЖУ
+      const recentHunger=S.hungerLog.filter(h=>Date.now()-new Date(h.date)<7*864e5);
+      if(recentHunger.length>=3&&!S.hungerSuggested){
+        S.hungerSuggested=true;save();
+        setTimeout(()=>{
+          const newKcal=Math.round((S.settings.kcal||2000)*1.1);
+          if(confirm(`Замечаю частые запросы про голод (${recentHunger.length} раз за неделю). Возможно, текущая норма ${S.settings.kcal}ккал недостаточна.\nПредлагаю попробовать ${newKcal}ккал (+10%). Применить?`)){
+            S.settings.kcal=newKcal;save();
+            document.getElementById('s-kcal').value=newKcal;
+          }
+        },1000);
+      }
+    }
   }else loading.textContent='Ошибка: '+(resp?.error||'нет ответа');
   loading.classList.remove('loading');msgs.scrollTop=msgs.scrollHeight;
 }
@@ -1551,9 +1631,250 @@ async function loadYazio(){
     });
     save();
     if(el)el.innerHTML=`<div class="yz-ok">✓ Синхронизировано ${new Date(data.synced_at).toLocaleDateString('ru-RU')} · ${data.frequent_dishes?.length||0} блюд · ср. ${data.summary?.avg_kcal||0} ккал/день</div>`;
+    // Автокорректировка меню сегодня по факту Yazio
+    await correctTodayByYazio(data);
+    // Показываем кнопку профиля если уже есть
+    if(S.yazioProfile)document.getElementById('btnShowProfile').style.display='block';
   }catch(e){
     if(el)el.innerHTML=`<div class="nr">Не удалось загрузить. Проверь что yazio_sync.py запускался и данные верны.<br><small style="opacity:0.7">${url}</small></div>`;
   }
+}
+
+/* ── YAZIO DEEP ANALYSIS ── */
+async function startYazioDeepAnalysis(){
+  if(!S.yazioData){alert('Сначала загрузи данные Yazio');return;}
+  if(!S.settings.apikey){alert('Укажи API ключ');return;}
+  const el=document.getElementById('yazioInfo');
+  if(el)el.innerHTML=`<div style="font-size:12px;color:var(--text2)"><span class="spin"></span> Claude анализирует 3 месяца питания — это займёт ~30 секунд...</div>`;
+
+  const diary=S.yazioData.diary||[];
+  const dishes=S.yazioData.frequent_dishes||[];
+  const summary=S.yazioData.summary||{};
+  const g=S.settings;
+
+  const prompt=`Проанализируй историю питания пользователя за последние ${diary.length} дней.
+
+ДАННЫЕ:
+Средние показатели: ${summary.avg_kcal||0}ккал, Б${summary.avg_prot||0}/Ж${summary.avg_fat||0}/У${summary.avg_carb||0}г/день
+Цели пользователя: ${g.kcal}ккал, Б${g.prot}/Ж${g.fat}/У${g.carb}г, клетчатка ${g.fiber}г, жиры нас/ненас ${g.fa}, углев слож/прост ${g.ca}
+Частые блюда/продукты: ${dishes.join(', ')}
+История по дням (последние 14): ${diary.slice(0,14).map(d=>`${d.date}: ${d.kcal}ккал, блюда: ${(d.dishes||[]).slice(0,5).join(', ')}`).join(' | ')}
+
+Выполни глубокий анализ и верни ТОЛЬКО JSON без markdown:
+{
+  "patterns": "Паттерны питания: частота приёмов, регулярность, разнообразие, особенности",
+  "preferences": "Вкусовые предпочтения, любимые продукты, текстуры, вкусы",
+  "favorites": ["продукт или блюдо 1", "продукт или блюдо 2"],
+  "alternatives": "Конкретные замены скучных привычных продуктов: вместо X → Y (тот же нутриентный профиль, интереснее вкус)",
+  "concerns": "Общие зоны внимания",
+  "recommendations": [
+    {
+      "type": "excess|deficiency|ok",
+      "category": "название категории (например: Фрукты и ягоды, Клетчатка, Витамин B12, Белок, Крупы и злаки, Омега-3, Железо и т.д.)",
+      "text": "Конкретная рекомендация с обоснованием. Например: вы потребляете слишком много фруктов — в среднем X порций в день при норме Y. Рекомендую сократить до Z. или: судя по рациону, вероятен дефицит витамина D — вы редко употребляете жирную рыбу, яйца и молочные продукты. Добавьте лосось 2-3 раза в неделю.",
+      "action": "Краткое действие: добавить/сократить/заменить что конкретно"
+    }
+  ],
+  "hunger_pattern": "ok или frequent",
+  "kcal_suggestion": null
+}
+Сделай 5-8 конкретных рекомендаций охватывающих: макронутриенты, клетчатку, витамины (B-группа, C, D, A, E), минералы (железо, кальций, магний, цинк), группы продуктов (овощи, злаки, белок, жиры). Основывайся на реальных данных рациона.`;
+
+  const resp=await claude([{role:'user',content:prompt}],'Ты диетолог-нутрициолог. Глубокий анализ питания. Только JSON.',2000);
+  if(!resp||typeof resp==='object'){
+    if(el)el.innerHTML=`<div class="nr">Ошибка анализа: ${resp?.error||'нет ответа'}</div>`;return;
+  }
+  try{
+    const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
+    S.yazioProfile=data;save();
+    if(el)el.innerHTML=`<div class="ng">✓ Анализ завершён — просмотри и скорректируй профиль</div>`;
+    document.getElementById('btnShowProfile').style.display='block';
+    // Предложение скорректировать КБЖУ если нужно
+    if(data.kcal_suggestion&&Math.abs(data.kcal_suggestion-g.kcal)>150){
+      setTimeout(()=>{
+        if(confirm(`Claude предлагает скорректировать норму калорий: ${g.kcal} → ${data.kcal_suggestion} ккал/день.\nОснование: фактическое потребление за 3 месяца.\nПрименить?`)){
+          document.getElementById('s-kcal').value=data.kcal_suggestion;
+          saveSettings(true);
+        }
+      },500);
+    }
+    showYazioProfile();
+  }catch(e){
+    if(el)el.innerHTML=`<div class="nr">Ошибка разбора. Попробуй ещё раз.</div>`;
+  }
+}
+
+function showYazioProfile(){
+  if(!S.yazioProfile){alert('Сначала запусти глубокий анализ');return;}
+  const p=S.yazioProfile;
+  subScreen('yazio-profile','Профиль питания','settings');
+  document.getElementById('yp-patterns-text').textContent=p.patterns||'—';
+  document.getElementById('yp-prefs-text').textContent=p.preferences||'—';
+  document.getElementById('yp-alt-text').textContent=p.alternatives||'—';
+  document.getElementById('yp-concerns-text').textContent=p.concerns||'—';
+
+  // Рекомендации
+  const recs=p.recommendations||[];
+  const recsCard=document.getElementById('yp-recs');
+  const recsList=document.getElementById('yp-recs-list');
+  if(recs.length){
+    recsCard.style.display='block';
+    recsList.innerHTML=recs.map(r=>{
+      const icon=r.type==='excess'?'⚠':r.type==='deficiency'?'↓':'✓';
+      const color=r.type==='excess'?'var(--acc2)':r.type==='deficiency'?'var(--acc)':'#4ade80';
+      return`<div style="padding:12px 0;border-bottom:0.5px solid var(--cb)">
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+          <span style="font-size:14px;color:${color};flex-shrink:0">${icon}</span>
+          <span style="font-size:13px;font-weight:500;color:${color}">${esc(r.category)}</span>
+        </div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:5px">${esc(r.text)}</div>
+        ${r.action?`<div style="font-size:11px;padding:4px 10px;background:rgba(255,255,255,0.05);border-radius:20px;display:inline-block;color:var(--text2)">${esc(r.action)}</div>`:''}
+      </div>`;
+    }).join('');
+    // Убираем border у последнего
+    const items=recsList.querySelectorAll('div[style*="border-bottom"]');
+    if(items.length)items[items.length-1].style.borderBottom='none';
+  }else{
+    recsCard.style.display='none';
+  }
+  // Список любимых с кнопками добавления
+  const favs=p.favorites||[];
+  const el=document.getElementById('yp-favs-list');
+  if(!favs.length){el.innerHTML='<p style="font-size:12px;color:var(--text2)">Нет данных</p>';return;}
+  el.innerHTML=favs.map((name,i)=>{
+    const inList=S.dishes.find(d=>d.name.toLowerCase()===name.toLowerCase());
+    return`<div class="pi">
+      <div class="pinf"><div class="pnm">${esc(name)}</div></div>
+      ${inList
+        ?'<span style="font-size:11px;color:#4ade80">✓ в списке</span>'
+        :`<button onclick="addFavFromProfile('${esc(name)}')" style="font-size:11px;background:none;border:0.5px solid rgba(74,222,128,0.4);color:#4ade80;padding:3px 9px;border-radius:20px;cursor:pointer">+ добавить</button>`
+      }
+    </div>`;
+  }).join('');
+}
+
+function addFavFromProfile(name){
+  if(!S.dishes.find(d=>d.name.toLowerCase()===name.toLowerCase())){
+    S.dishes.push({id:Date.now(),name,ingredients:'',kcal:0,prot:0,fat:0,carb:0,note:'из профиля Yazio',liked:true,disliked:false});
+    save();showYazioProfile();
+  }
+}
+
+function addAllFavFromProfile(){
+  const favs=S.yazioProfile?.favorites||[];
+  let added=0;
+  favs.forEach(name=>{
+    if(!S.dishes.find(d=>d.name.toLowerCase()===name.toLowerCase())){
+      S.dishes.push({id:Date.now()+Math.random(),name,ingredients:'',kcal:0,prot:0,fat:0,carb:0,note:'из профиля Yazio',liked:true,disliked:false});
+      added++;
+    }
+  });
+  save();showYazioProfile();
+  if(added>0)alert(`Добавлено ${added} блюд/продуктов в список любимых`);
+}
+
+let yazioEditSection='';
+function editYazioSection(section){
+  yazioEditSection=section;
+  const titles={patterns:'Паттерны питания',prefs:'Предпочтения',alternatives:'Альтернативы'};
+  document.getElementById('yazioEditTitle').textContent=titles[section]||section;
+  const texts={patterns:'yp-patterns-text',prefs:'yp-prefs-text',alternatives:'yp-alt-text'};
+  document.getElementById('yazioEditArea').value=document.getElementById(texts[section])?.textContent||'';
+  subScreen('yazio-edit','Редактировать','yazio-profile');
+}
+
+function saveYazioSection(){
+  const val=document.getElementById('yazioEditArea').value.trim();
+  if(!S.yazioProfile)S.yazioProfile={};
+  const map={patterns:'patterns',prefs:'preferences',alternatives:'alternatives'};
+  S.yazioProfile[map[yazioEditSection]||yazioEditSection]=val;
+  save();goBack();
+}
+
+function saveYazioProfile(){
+  save();alert('Профиль сохранён — будет учитываться при составлении меню');
+}
+
+/* ── КОРРЕКТИРОВКА МЕНЮ ПО ФАКТУ YAZIO ── */
+async function correctTodayByYazio(yazioData){
+  if(!S.menu||!S.settings.apikey)return;
+  const today=new Date().toISOString().split('T')[0];
+  const todayFact=yazioData.diary?.find(d=>d.date===today);
+  if(!todayFact||!todayFact.dishes?.length)return;
+
+  const todayIdx=weekDays().findIndex(d=>isToday(d.date));
+  if(todayIdx<0)return;
+  const dm=S.menu[todayIdx]||{};
+  const meals=getMeals();
+  const g=S.settings;
+
+  // Считаем сколько уже съедено по факту
+  const factKcal=todayFact.kcal||0;
+  const factProt=todayFact.prot||0;
+  const factFat=todayFact.fat||0;
+  const factCarb=todayFact.carb||0;
+
+  // Если факт значительно отличается от плана первого приёма — корректируем
+  const planFirstMeal=dm[meals[0]];
+  if(!planFirstMeal)return;
+  const diff=Math.abs(factKcal-(planFirstMeal.kcal||0));
+  if(diff<80)return; // разница меньше 80 ккал — не стоит пересчитывать
+
+  const remaining=meals.slice(1).map(t=>dm[t]?`${t}: ${dm[t].name}`:null).filter(Boolean).join(', ');
+  const resp=await claude([{role:'user',content:`Пользователь съел на ${meals[0]} по факту ${factKcal}ккал (Б${factProt}/Ж${factFat}/У${factCarb}г), а план был ${planFirstMeal.kcal}ккал.
+Скорректируй оставшиеся приёмы пищи сегодня чтобы дневная норма ${g.kcal}ккал (Б${g.prot}/Ж${g.fat}/У${g.carb}г) была выполнена.
+Оставшиеся приёмы: ${remaining}
+Продукты: ${S.products.map(p=>p.name).join(', ')}
+Ответь ТОЛЬКО JSON: {"meals":{${meals.slice(1).map(t=>`"${t}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`).join(',')}},"note":"краткое объяснение"}`}],
+  'Ты диетолог. Только JSON.',800);
+
+  if(resp&&typeof resp==='string'){
+    try{
+      const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
+      meals.slice(1).forEach(t=>{if(data.meals?.[t]){S.menu[todayIdx][t]=data.meals[t];}});
+      if(data.note)S.menu[todayIdx].yazioNote=data.note;
+      save();renderMenu();
+    }catch(e){}
+  }
+}
+
+/* ── ВНЕПЛАНОВЫЙ ПЕРЕКУС ── */
+async function addExtraMeal(dayIdx,mealType,wish){
+  if(!S.settings.apikey)return;
+  const days=weekDays();const d=days[dayIdx];const g=S.settings;
+  const prods=S.products.map(p=>p.name).join(', ');
+  const dm=S.menu?.[dayIdx]||{};
+  const currentKcal=Object.values(dm).filter(v=>v&&v.kcal).reduce((s,m)=>s+(m.kcal||0),0);
+  const remaining=g.kcal-currentKcal;
+
+  const resp=await claude([{role:'user',content:`Пользователь просит добавить ${mealType||'перекус'} в ${d.label}.
+Пожелание: "${wish||'что-нибудь лёгкое'}"
+Доступные продукты: ${prods}
+Уже запланировано на день: ${currentKcal}ккал из ${g.kcal}ккал
+Доступный остаток: ~${remaining}ккал
+Предложи подходящий перекус вписывающийся в остаток.
+Ответь ТОЛЬКО JSON: {"name":"...","kcal":0,"prot":0,"fat":0,"carb":0,"note":"почему это хороший перекус"}`}],
+  'Ты диетолог. Только JSON.',400);
+
+  if(resp&&typeof resp==='string'){
+    try{
+      const meal=JSON.parse(resp.replace(/```json|```/g,'').trim());
+      if(!S.menu[dayIdx])S.menu[dayIdx]={};
+      S.menu[dayIdx][mealType||'Перекус']=meal;
+      // Обновить macros
+      const meals=getMeals();
+      const dm2=S.menu[dayIdx];
+      const allMealKeys=[...meals,'Перекус','Второй перекус'];
+      S.menu[dayIdx].macros={
+        kcal:allMealKeys.reduce((s,t)=>s+(dm2[t]?.kcal||0),0),
+        prot:allMealKeys.reduce((s,t)=>s+(dm2[t]?.prot||0),0),
+        fat:allMealKeys.reduce((s,t)=>s+(dm2[t]?.fat||0),0),
+        carb:allMealKeys.reduce((s,t)=>s+(dm2[t]?.carb||0),0),
+      };
+      save();return meal;
+    }catch(e){}
+  }
+  return null;
 }
 
 /* ── RECIPE ── */
@@ -1606,7 +1927,7 @@ async function processPhoto(event){
         headers:{'Content-Type':'application/json','x-api-key':S.settings.apikey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
         body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:[
           {type:'image',source:{type:'base64',media_type:file.type,data:b64}},
-          {type:'text',text:'Фото продукта/упаковки. ТОЛЬКО JSON без markdown:\n{"name":"...","weight":число_или_null,"expiry":"YYYY-MM-DD или null","kcal":0,"prot":0,"fat":0,"carb":0,"icon":"emoji"}\nВес и срок — если видны на упаковке, иначе null. КБЖУ на 100г.'}
+          {type:'text',text:'Фото продукта/упаковки. ТОЛЬКО JSON без markdown:\n{"name":"...","weight":число_или_null,"expiry":"YYYY-MM-DD или null","kcal":0,"prot":0,"fat":0,"carb":0,"icon":"emoji"}\nВес и срок — если видны на упаковке, иначе null. КБЖУ на 100г — если видны на этикетке бери точные значения, если текст не читается — определи продукт визуально и укажи средние значения из базы знаний. Никогда не возвращай нули.'}
         ]}]})
       });
       const d=await r.json();
@@ -1617,7 +1938,11 @@ async function processPhoto(event){
         document.getElementById('p-expiry').value=data.expiry?new Date(data.expiry).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
         document.getElementById('p-kcal').value=data.kcal||'';document.getElementById('p-prot').value=data.prot||'';
         document.getElementById('p-fat').value=data.fat||'';document.getElementById('p-carb').value=data.carb||'';
-        status.innerHTML='✓ Проверь и скорректируй';status.style.color='#4ade80';
+        const approx=(!data.kcal||data.kcal===0);
+        status.innerHTML=approx
+          ?'✓ Продукт распознан — КБЖУ заполнено приблизительно, проверь'
+          :'✓ Проверь и скорректируй';
+        status.style.color=approx?'var(--acc2)':'#4ade80';
       }else status.textContent='Не удалось распознать. Заполни вручную.';
     }catch(err){status.textContent='Ошибка. Заполни вручную.';}
   };
