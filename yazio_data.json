@@ -1,12 +1,1113 @@
 {
-  "synced_at": "2026-03-29T18:48:53.318689",
+  "synced_at": "2026-03-29T18:55:56.779326",
   "days_back": 90,
-  "diary": [],
-  "frequent_dishes": [],
+  "diary": [
+    {
+      "date": "2026-03-29",
+      "kcal": 1337,
+      "prot": 71.1,
+      "fat": 33.0,
+      "carb": 179.5,
+      "fiber": 0,
+      "dishes": [
+        "breakfast"
+      ],
+      "entry_count": 38
+    },
+    {
+      "date": "2026-03-28",
+      "kcal": 3960,
+      "prot": 202.2,
+      "fat": 50.3,
+      "carb": 652.1,
+      "fiber": 0,
+      "dishes": [
+        "dinner",
+        "breakfast",
+        "lunch",
+        "snack"
+      ],
+      "entry_count": 57
+    },
+    {
+      "date": "2026-03-27",
+      "kcal": 2241,
+      "prot": 148.7,
+      "fat": 46.8,
+      "carb": 295.0,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 46
+    },
+    {
+      "date": "2026-03-26",
+      "kcal": 2626,
+      "prot": 138.7,
+      "fat": 46.3,
+      "carb": 394.9,
+      "fiber": 0,
+      "dishes": [
+        "dinner",
+        "breakfast"
+      ],
+      "entry_count": 55
+    },
+    {
+      "date": "2026-03-25",
+      "kcal": 2403,
+      "prot": 135.9,
+      "fat": 46.3,
+      "carb": 350.8,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 50
+    },
+    {
+      "date": "2026-03-24",
+      "kcal": 2640,
+      "prot": 133.0,
+      "fat": 46.7,
+      "carb": 398.1,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 48
+    },
+    {
+      "date": "2026-03-23",
+      "kcal": 2071,
+      "prot": 123.7,
+      "fat": 46.7,
+      "carb": 280.9,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 45
+    },
+    {
+      "date": "2026-03-22",
+      "kcal": 2564,
+      "prot": 121.8,
+      "fat": 45.4,
+      "carb": 410.1,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "snack",
+        "lunch"
+      ],
+      "entry_count": 51
+    },
+    {
+      "date": "2026-03-21",
+      "kcal": 2789,
+      "prot": 141.2,
+      "fat": 46.1,
+      "carb": 328.7,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch",
+        "snack"
+      ],
+      "entry_count": 50
+    },
+    {
+      "date": "2026-03-20",
+      "kcal": 2217,
+      "prot": 135.6,
+      "fat": 45.7,
+      "carb": 301.5,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast",
+        "snack"
+      ],
+      "entry_count": 51
+    },
+    {
+      "date": "2026-03-19",
+      "kcal": 2488,
+      "prot": 146.0,
+      "fat": 45.8,
+      "carb": 347.9,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "dinner",
+        "snack"
+      ],
+      "entry_count": 59
+    },
+    {
+      "date": "2026-03-18",
+      "kcal": 2250,
+      "prot": 127.8,
+      "fat": 46.0,
+      "carb": 315.5,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 52
+    },
+    {
+      "date": "2026-03-17",
+      "kcal": 2108,
+      "prot": 133.9,
+      "fat": 46.3,
+      "carb": 271.7,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "dinner"
+      ],
+      "entry_count": 55
+    },
+    {
+      "date": "2026-03-16",
+      "kcal": 2164,
+      "prot": 140.4,
+      "fat": 46.0,
+      "carb": 282.8,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 56
+    },
+    {
+      "date": "2026-03-15",
+      "kcal": 2341,
+      "prot": 172.1,
+      "fat": 46.0,
+      "carb": 297.8,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 55
+    },
+    {
+      "date": "2026-03-14",
+      "kcal": 2147,
+      "prot": 166.1,
+      "fat": 45.5,
+      "carb": 258.1,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 54
+    },
+    {
+      "date": "2026-03-13",
+      "kcal": 2049,
+      "prot": 147.5,
+      "fat": 46.3,
+      "carb": 253.5,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast",
+        "dinner"
+      ],
+      "entry_count": 48
+    },
+    {
+      "date": "2026-03-12",
+      "kcal": 2106,
+      "prot": 130.0,
+      "fat": 45.1,
+      "carb": 285.5,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 51
+    },
+    {
+      "date": "2026-03-11",
+      "kcal": 1873,
+      "prot": 132.8,
+      "fat": 45.8,
+      "carb": 220.6,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 45
+    },
+    {
+      "date": "2026-03-10",
+      "kcal": 2169,
+      "prot": 135.4,
+      "fat": 46.5,
+      "carb": 276.4,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 53
+    },
+    {
+      "date": "2026-03-09",
+      "kcal": 2307,
+      "prot": 141.6,
+      "fat": 46.3,
+      "carb": 314.3,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 44
+    },
+    {
+      "date": "2026-03-08",
+      "kcal": 2357,
+      "prot": 138.5,
+      "fat": 45.9,
+      "carb": 336.2,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 46
+    },
+    {
+      "date": "2026-03-07",
+      "kcal": 2437,
+      "prot": 161.5,
+      "fat": 45.7,
+      "carb": 332.5,
+      "fiber": 0,
+      "dishes": [
+        "snack",
+        "breakfast",
+        "lunch",
+        "dinner"
+      ],
+      "entry_count": 52
+    },
+    {
+      "date": "2026-03-06",
+      "kcal": 2000,
+      "prot": 132.6,
+      "fat": 46.4,
+      "carb": 247.0,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 47
+    },
+    {
+      "date": "2026-03-05",
+      "kcal": 2191,
+      "prot": 140.6,
+      "fat": 46.4,
+      "carb": 292.8,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch",
+        "dinner"
+      ],
+      "entry_count": 55
+    },
+    {
+      "date": "2026-03-04",
+      "kcal": 2047,
+      "prot": 139.0,
+      "fat": 46.1,
+      "carb": 250.5,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "dinner",
+        "breakfast"
+      ],
+      "entry_count": 39
+    },
+    {
+      "date": "2026-03-03",
+      "kcal": 2002,
+      "prot": 123.2,
+      "fat": 45.9,
+      "carb": 262.7,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 42
+    },
+    {
+      "date": "2026-03-02",
+      "kcal": 2347,
+      "prot": 171.3,
+      "fat": 46.1,
+      "carb": 292.1,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 40
+    },
+    {
+      "date": "2026-03-01",
+      "kcal": 2447,
+      "prot": 167.1,
+      "fat": 46.2,
+      "carb": 322.0,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 73
+    },
+    {
+      "date": "2026-02-28",
+      "kcal": 2248,
+      "prot": 162.0,
+      "fat": 47.2,
+      "carb": 270.8,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 47
+    },
+    {
+      "date": "2026-02-27",
+      "kcal": 1995,
+      "prot": 134.1,
+      "fat": 46.0,
+      "carb": 248.7,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 53
+    },
+    {
+      "date": "2026-02-26",
+      "kcal": 1981,
+      "prot": 145.5,
+      "fat": 46.4,
+      "carb": 239.3,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 38
+    },
+    {
+      "date": "2026-02-25",
+      "kcal": 2181,
+      "prot": 149.1,
+      "fat": 45.9,
+      "carb": 274.8,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 37
+    },
+    {
+      "date": "2026-02-24",
+      "kcal": 2016,
+      "prot": 135.1,
+      "fat": 46.1,
+      "carb": 250.2,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 55
+    },
+    {
+      "date": "2026-02-23",
+      "kcal": 1996,
+      "prot": 152.0,
+      "fat": 45.5,
+      "carb": 224.1,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 44
+    },
+    {
+      "date": "2026-02-22",
+      "kcal": 1971,
+      "prot": 128.4,
+      "fat": 45.8,
+      "carb": 237.7,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 40
+    },
+    {
+      "date": "2026-02-21",
+      "kcal": 1949,
+      "prot": 141.4,
+      "fat": 46.0,
+      "carb": 230.7,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 43
+    },
+    {
+      "date": "2026-02-20",
+      "kcal": 2012,
+      "prot": 142.3,
+      "fat": 44.8,
+      "carb": 251.6,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 51
+    },
+    {
+      "date": "2026-02-19",
+      "kcal": 2401,
+      "prot": 144.5,
+      "fat": 46.5,
+      "carb": 339.4,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch",
+        "dinner"
+      ],
+      "entry_count": 40
+    },
+    {
+      "date": "2026-02-18",
+      "kcal": 2180,
+      "prot": 145.6,
+      "fat": 45.4,
+      "carb": 292.5,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 38
+    },
+    {
+      "date": "2026-02-17",
+      "kcal": 2388,
+      "prot": 150.7,
+      "fat": 45.5,
+      "carb": 336.7,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 45
+    },
+    {
+      "date": "2026-02-16",
+      "kcal": 2007,
+      "prot": 140.3,
+      "fat": 46.7,
+      "carb": 246.4,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 47
+    },
+    {
+      "date": "2026-02-15",
+      "kcal": 2337,
+      "prot": 138.1,
+      "fat": 45.8,
+      "carb": 337.1,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch",
+        "snack"
+      ],
+      "entry_count": 43
+    },
+    {
+      "date": "2026-02-14",
+      "kcal": 2266,
+      "prot": 136.3,
+      "fat": 49.3,
+      "carb": 309.1,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch",
+        "snack"
+      ],
+      "entry_count": 46
+    },
+    {
+      "date": "2026-02-13",
+      "kcal": 1838,
+      "prot": 127.9,
+      "fat": 46.0,
+      "carb": 208.7,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 45
+    },
+    {
+      "date": "2026-02-12",
+      "kcal": 2151,
+      "prot": 146.7,
+      "fat": 55.6,
+      "carb": 256.3,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 54
+    },
+    {
+      "date": "2026-02-11",
+      "kcal": 1910,
+      "prot": 126.4,
+      "fat": 49.3,
+      "carb": 229.6,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 43
+    },
+    {
+      "date": "2026-02-10",
+      "kcal": 1899,
+      "prot": 119.9,
+      "fat": 46.0,
+      "carb": 238.9,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 53
+    },
+    {
+      "date": "2026-02-09",
+      "kcal": 1843,
+      "prot": 132.2,
+      "fat": 46.1,
+      "carb": 211.4,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 52
+    },
+    {
+      "date": "2026-02-08",
+      "kcal": 1980,
+      "prot": 146.1,
+      "fat": 45.9,
+      "carb": 241.6,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch",
+        "snack"
+      ],
+      "entry_count": 50
+    },
+    {
+      "date": "2026-02-07",
+      "kcal": 2147,
+      "prot": 134.2,
+      "fat": 48.7,
+      "carb": 281.8,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 56
+    },
+    {
+      "date": "2026-02-06",
+      "kcal": 1615,
+      "prot": 154.6,
+      "fat": 44.3,
+      "carb": 141.8,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 57
+    },
+    {
+      "date": "2026-02-05",
+      "kcal": 2253,
+      "prot": 137.3,
+      "fat": 49.0,
+      "carb": 307.4,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 38
+    },
+    {
+      "date": "2026-02-04",
+      "kcal": 1834,
+      "prot": 127.8,
+      "fat": 47.6,
+      "carb": 217.4,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 50
+    },
+    {
+      "date": "2026-02-03",
+      "kcal": 1979,
+      "prot": 131.5,
+      "fat": 43.5,
+      "carb": 249.2,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 43
+    },
+    {
+      "date": "2026-02-02",
+      "kcal": 2037,
+      "prot": 165.5,
+      "fat": 46.3,
+      "carb": 225.8,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 51
+    },
+    {
+      "date": "2026-02-01",
+      "kcal": 2137,
+      "prot": 134.4,
+      "fat": 43.6,
+      "carb": 290.4,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 44
+    },
+    {
+      "date": "2026-01-31",
+      "kcal": 2023,
+      "prot": 142.7,
+      "fat": 44.1,
+      "carb": 256.3,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 53
+    },
+    {
+      "date": "2026-01-30",
+      "kcal": 2083,
+      "prot": 158.7,
+      "fat": 42.9,
+      "carb": 257.2,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 35
+    },
+    {
+      "date": "2026-01-29",
+      "kcal": 2059,
+      "prot": 138.0,
+      "fat": 46.0,
+      "carb": 271.4,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 44
+    },
+    {
+      "date": "2026-01-28",
+      "kcal": 1876,
+      "prot": 142.9,
+      "fat": 46.4,
+      "carb": 210.6,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 31
+    },
+    {
+      "date": "2026-01-27",
+      "kcal": 1959,
+      "prot": 142.3,
+      "fat": 46.0,
+      "carb": 243.3,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "snack",
+        "lunch"
+      ],
+      "entry_count": 45
+    },
+    {
+      "date": "2026-01-26",
+      "kcal": 1989,
+      "prot": 138.7,
+      "fat": 46.1,
+      "carb": 254.6,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 33
+    },
+    {
+      "date": "2026-01-25",
+      "kcal": 1921,
+      "prot": 133.7,
+      "fat": 45.9,
+      "carb": 230.7,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 41
+    },
+    {
+      "date": "2026-01-24",
+      "kcal": 1947,
+      "prot": 156.6,
+      "fat": 46.2,
+      "carb": 220.9,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 44
+    },
+    {
+      "date": "2026-01-23",
+      "kcal": 1857,
+      "prot": 145.2,
+      "fat": 45.8,
+      "carb": 201.0,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 43
+    },
+    {
+      "date": "2026-01-22",
+      "kcal": 2151,
+      "prot": 134.5,
+      "fat": 44.2,
+      "carb": 297.4,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 37
+    },
+    {
+      "date": "2026-01-21",
+      "kcal": 1710,
+      "prot": 111.2,
+      "fat": 47.9,
+      "carb": 198.2,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 41
+    },
+    {
+      "date": "2026-01-20",
+      "kcal": 2190,
+      "prot": 157.6,
+      "fat": 41.9,
+      "carb": 270.9,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 35
+    },
+    {
+      "date": "2026-01-19",
+      "kcal": 1817,
+      "prot": 125.3,
+      "fat": 46.9,
+      "carb": 213.4,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 42
+    },
+    {
+      "date": "2026-01-18",
+      "kcal": 2109,
+      "prot": 140.0,
+      "fat": 51.2,
+      "carb": 269.3,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "snack",
+        "lunch"
+      ],
+      "entry_count": 39
+    },
+    {
+      "date": "2026-01-17",
+      "kcal": 2213,
+      "prot": 143.3,
+      "fat": 46.2,
+      "carb": 298.2,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 38
+    },
+    {
+      "date": "2026-01-16",
+      "kcal": 1943,
+      "prot": 150.0,
+      "fat": 50.9,
+      "carb": 211.5,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 47
+    },
+    {
+      "date": "2026-01-15",
+      "kcal": 1644,
+      "prot": 120.9,
+      "fat": 43.0,
+      "carb": 180.3,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 32
+    },
+    {
+      "date": "2026-01-14",
+      "kcal": 1989,
+      "prot": 142.4,
+      "fat": 40.0,
+      "carb": 254.6,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 42
+    },
+    {
+      "date": "2026-01-13",
+      "kcal": 1908,
+      "prot": 158.9,
+      "fat": 44.4,
+      "carb": 209.8,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 40
+    },
+    {
+      "date": "2026-01-12",
+      "kcal": 1880,
+      "prot": 168.5,
+      "fat": 45.8,
+      "carb": 193.3,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 37
+    },
+    {
+      "date": "2026-01-11",
+      "kcal": 1911,
+      "prot": 162.9,
+      "fat": 42.2,
+      "carb": 210.0,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch",
+        "snack"
+      ],
+      "entry_count": 45
+    },
+    {
+      "date": "2026-01-10",
+      "kcal": 1804,
+      "prot": 124.1,
+      "fat": 32.5,
+      "carb": 240.9,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 30
+    },
+    {
+      "date": "2026-01-09",
+      "kcal": 1711,
+      "prot": 131.1,
+      "fat": 39.3,
+      "carb": 196.8,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 32
+    },
+    {
+      "date": "2026-01-08",
+      "kcal": 1794,
+      "prot": 143.5,
+      "fat": 42.0,
+      "carb": 206.0,
+      "fiber": 0,
+      "dishes": [
+        "breakfast",
+        "lunch"
+      ],
+      "entry_count": 37
+    },
+    {
+      "date": "2026-01-07",
+      "kcal": 1590,
+      "prot": 110.2,
+      "fat": 39.0,
+      "carb": 192.7,
+      "fiber": 0,
+      "dishes": [
+        "lunch",
+        "breakfast"
+      ],
+      "entry_count": 35
+    },
+    {
+      "date": "2025-12-30",
+      "kcal": 607,
+      "prot": 43.9,
+      "fat": 18.4,
+      "carb": 60.8,
+      "fiber": 0,
+      "dishes": [
+        "breakfast"
+      ],
+      "entry_count": 12
+    }
+  ],
+  "frequent_dishes": [
+    "breakfast",
+    "lunch",
+    "snack",
+    "dinner"
+  ],
   "summary": {
-    "avg_kcal": 0,
-    "avg_prot": 0,
-    "avg_fat": 0,
-    "avg_carb": 0
+    "avg_kcal": 2083,
+    "avg_prot": 139.7,
+    "avg_fat": 45.3,
+    "avg_carb": 266.2
   }
 }
