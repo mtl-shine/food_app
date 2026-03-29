@@ -265,7 +265,9 @@ select option{background:#1a1a2e;color:var(--text)}
     <div class="card">
       <div class="ct">API ключ Claude</div>
       <div class="nr" style="margin-bottom:9px;font-size:11px">Хранится только на этом устройстве. Получи на console.anthropic.com → API Keys</div>
-      <input type="password" id="s-apikey" placeholder="sk-ant-...">
+      <input type="password" id="s-apikey" placeholder="sk-ant-..." oninput="clearBalanceDisplay()">
+      <div id="balanceDisplay" style="margin-top:8px"></div>
+      <button class="bs" onclick="checkBalance()" style="margin-top:6px;font-size:12px">💰 Проверить баланс</button>
     </div>
     <div class="card">
       <div class="ct">Приёмы пищи и тренировки</div>
@@ -1648,9 +1650,18 @@ async function loadYazio(){
       };
     }
 
-    // Добавляем частые блюда в список
-    (data.frequent_dishes||[]).forEach(name=>{
-      if(name&&!S.dishes.find(d=>d.name.toLowerCase()===name.toLowerCase())){
+    // Добавляем частые блюда в список с нормализацией названий
+    (data.frequent_dishes||[]).forEach(rawName=>{
+      if(!rawName)return;
+      // Убираем граммовку из названия: "Творог 5% 100г" → "Творог 5%"
+      const name=rawName.replace(/\s+[\d,.]+\s*(г|гр|g|мл|ml|кг|kg|л|l)\b\.?/gi,'').trim();
+      if(!name)return;
+      // Проверяем дубли с нормализацией — сравниваем очищенные названия
+      const exists=S.dishes.find(d=>{
+        const clean=d.name.replace(/\s+[\d,.]+\s*(г|гр|g|мл|ml|кг|kg|л|l)\b\.?/gi,'').trim();
+        return clean.toLowerCase()===name.toLowerCase();
+      });
+      if(!exists){
         S.dishes.push({id:Date.now()+Math.random(),name,ingredients:'',kcal:0,prot:0,fat:0,carb:0,note:'из Yazio',liked:false,disliked:false});
       }
     });
@@ -2063,6 +2074,41 @@ function setMC(n,btn){
   document.querySelectorAll('.mc-btn').forEach(b=>b.classList.remove('sel'));
   btn.classList.add('sel');
 }
+/* ── БАЛАНС API ── */
+function clearBalanceDisplay(){
+  const el=document.getElementById('balanceDisplay');if(el)el.innerHTML='';
+}
+
+async function checkBalance(){
+  const key=document.getElementById('s-apikey').value.trim()||S.settings.apikey;
+  if(!key){alert('Сначала введи API ключ');return;}
+  const el=document.getElementById('balanceDisplay');
+  el.innerHTML=`<div style="font-size:12px;color:var(--text2)"><span class="spin"></span> Проверяю...</div>`;
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1,messages:[{role:'user',content:'1'}]})
+    });
+    const data=await r.json();
+    if(r.ok){
+      const remaining=r.headers.get('anthropic-ratelimit-tokens-remaining');
+      el.innerHTML=`<div class="ng" style="font-size:12px">✓ Ключ действителен, баланс есть${remaining?` · токенов в минуту осталось: ${parseInt(remaining).toLocaleString()}`:''}.<br><span style="opacity:0.7">Точный баланс: console.anthropic.com → Billing</span></div>`;
+    }else{
+      const msg=data.error?.message||'';
+      if(msg.toLowerCase().includes('credit')||msg.toLowerCase().includes('billing')){
+        el.innerHTML=`<div class="nr" style="font-size:12px">⚠ Баланс исчерпан — пополни на console.anthropic.com → Billing</div>`;
+      }else if(r.status===401||msg.toLowerCase().includes('invalid')||msg.toLowerCase().includes('auth')){
+        el.innerHTML=`<div class="nr" style="font-size:12px">✕ Неверный ключ — проверь правильность</div>`;
+      }else{
+        el.innerHTML=`<div class="na" style="font-size:12px">${r.status}: ${msg||'Неизвестная ошибка'}</div>`;
+      }
+    }
+  }catch(e){
+    el.innerHTML=`<div class="nr" style="font-size:12px">Ошибка соединения</div>`;
+  }
+}
+
 function saveSettings(silent){
   S.settings={
     ...S.settings,
