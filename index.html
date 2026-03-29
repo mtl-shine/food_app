@@ -1623,21 +1623,114 @@ async function loadYazio(){
     const r=await fetch(url+'?t='+Date.now());
     if(!r.ok)throw new Error('Файл не найден');
     const data=await r.json();
-    S.yazioData=data;
+
+    // ── МЕРЖ ДНЕВНИКА ──
+    // Инициализируем хранилище истории если нет
+    if(!S.yazioHistory)S.yazioHistory={};
+    // Добавляем/обновляем только дни из нового файла — старые не трогаем
+    const newDays=data.diary||[];
+    const updatedDates=[];
+    newDays.forEach(day=>{
+      S.yazioHistory[day.date]=day;
+      updatedDates.push(day.date);
+    });
+    // Собираем полный дневник из истории для анализа
+    const fullDiary=Object.values(S.yazioHistory).sort((a,b)=>b.date.localeCompare(a.date));
+    // Обновляем yazioData с полным дневником
+    S.yazioData={...data, diary:fullDiary};
+    // Пересчитываем summary по полной истории
+    if(fullDiary.length){
+      S.yazioData.summary={
+        avg_kcal:Math.round(fullDiary.reduce((s,d)=>s+(d.kcal||0),0)/fullDiary.length),
+        avg_prot:+(fullDiary.reduce((s,d)=>s+(d.prot||0),0)/fullDiary.length).toFixed(1),
+        avg_fat:+(fullDiary.reduce((s,d)=>s+(d.fat||0),0)/fullDiary.length).toFixed(1),
+        avg_carb:+(fullDiary.reduce((s,d)=>s+(d.carb||0),0)/fullDiary.length).toFixed(1),
+      };
+    }
+
+    // Добавляем частые блюда в список
     (data.frequent_dishes||[]).forEach(name=>{
       if(name&&!S.dishes.find(d=>d.name.toLowerCase()===name.toLowerCase())){
         S.dishes.push({id:Date.now()+Math.random(),name,ingredients:'',kcal:0,prot:0,fat:0,carb:0,note:'из Yazio',liked:false,disliked:false});
       }
     });
+
     save();
-    if(el)el.innerHTML=`<div class="yz-ok">✓ Синхронизировано ${new Date(data.synced_at).toLocaleDateString('ru-RU')} · ${data.frequent_dishes?.length||0} блюд · ср. ${data.summary?.avg_kcal||0} ккал/день</div>`;
-    // Автокорректировка меню сегодня по факту Yazio
+    const daysCount=fullDiary.length;
+    if(el)el.innerHTML=`<div class="yz-ok">✓ Синхронизировано ${new Date(data.synced_at).toLocaleDateString('ru-RU')} · обновлено ${updatedDates.length} дн. · история ${daysCount} дн. · ср. ${S.yazioData.summary?.avg_kcal||0} ккал/день</div>`;
+
+    // Вычитаем из холодильника если он не пуст
+    if(S.products.length>0){
+      await deductFromFridge(data, updatedDates);
+    }
+
+    // Корректировка меню сегодня
     await correctTodayByYazio(data);
-    // Показываем кнопку профиля если уже есть
     if(S.yazioProfile)document.getElementById('btnShowProfile').style.display='block';
   }catch(e){
     if(el)el.innerHTML=`<div class="nr">Не удалось загрузить. Проверь что yazio_sync.py запускался и данные верны.<br><small style="opacity:0.7">${url}</small></div>`;
   }
+}
+
+/* ── ВЫЧИТАНИЕ ИЗ ХОЛОДИЛЬНИКА ПО ФАКТУ YAZIO ── */
+async function deductFromFridge(yazioData, updatedDates){
+  if(!S.settings.apikey||!S.products.length)return;
+
+  // Берём только сегодня и вчера из обновлённых дней
+  const today=new Date().toISOString().split('T')[0];
+  const yesterday=new Date(Date.now()-864e5).toISOString().split('T')[0];
+  const relevantDays=(yazioData.diary||[]).filter(d=>
+    updatedDates.includes(d.date)&&(d.date===today||d.date===yesterday)&&(d.dishes||[]).length>0
+  );
+  if(!relevantDays.length)return;
+
+  const fridge=S.products.map(p=>`${p.name}: ${p.weight}г`).join(', ');
+  const factItems=relevantDays.map(d=>`${d.date}: ${(d.dishes||[]).join(', ')}`).join('\n');
+
+  const resp=await claude([{role:'user',content:`Сопоставь съеденные продукты с содержимым холодильника и определи что нужно вычесть.
+
+ХОЛОДИЛЬНИК:
+${fridge}
+
+ФАКТИЧЕСКИ СЪЕДЕНО:
+${factItems}
+
+Правила:
+- Сопоставляй нечётко (например "Куриная грудка филе" = "Куриная грудка")
+- Если продукт не найден в холодильнике — пропускай
+- Вычитай только реальный вес из блюда (формат "Продукт — 180г")
+- Если продукта меньше чем съедено — обнули его (не уходи в минус)
+
+Ответь ТОЛЬКО JSON:
+{"deductions":[{"product_name":"точное название из холодильника","deduct_grams":число}],"skipped":["продукт не найден 1"]}`}],
+  'Ты помощник по учёту продуктов. Только JSON.',600);
+
+  if(!resp||typeof resp!=='string')return;
+  try{
+    const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
+    const deductions=data.deductions||[];
+    if(!deductions.length)return;
+
+    let changed=false;
+    const log=[];
+    deductions.forEach(d=>{
+      const prod=S.products.find(p=>p.name.toLowerCase()===d.product_name.toLowerCase());
+      if(prod&&d.deduct_grams>0){
+        const before=prod.weight;
+        prod.weight=Math.max(0,Math.round(prod.weight-d.deduct_grams));
+        log.push(`${prod.name}: ${before}г → ${prod.weight}г`);
+        changed=true;
+      }
+    });
+
+    if(changed){
+      save();
+      // Показываем уведомление
+      const msg=`Холодильник обновлён по данным Yazio:\n${log.join('\n')}`;
+      console.log(msg);
+      // Тихо обновляем без alert — просто сохраняем
+    }
+  }catch(e){}
 }
 
 /* ── YAZIO DEEP ANALYSIS ── */
