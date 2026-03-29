@@ -1653,14 +1653,14 @@ async function loadYazio(){
     // Добавляем частые блюда в список с нормализацией названий
     (data.frequent_dishes||[]).forEach(rawName=>{
       if(!rawName)return;
-      // Убираем граммовку из названия: "Творог 5% 100г" → "Творог 5%"
-      const name=rawName.replace(/\s+[\d,.]+\s*(г|гр|g|мл|ml|кг|kg|л|l)\b\.?/gi,'').trim();
+      // Убираем граммовку: "Творог 5% — 150г" → "Творог 5%", "Курица 180г" → "Курица"
+      const normalizeName=s=>s
+        .replace(/\s*—\s*[\d,.]+\s*(г|гр|мл|кг|л|g|ml|kg|l|шт)(\.|\s|$)/gi,'')
+        .replace(/\s+[\d,.]+\s*(г|гр|мл|кг|л|g|ml|kg|l|шт)(\.|\s|$)/gi,'')
+        .trim();
+      const name=normalizeName(rawName);
       if(!name)return;
-      // Проверяем дубли с нормализацией — сравниваем очищенные названия
-      const exists=S.dishes.find(d=>{
-        const clean=d.name.replace(/\s+[\d,.]+\s*(г|гр|g|мл|ml|кг|kg|л|l)\b\.?/gi,'').trim();
-        return clean.toLowerCase()===name.toLowerCase();
-      });
+      const exists=S.dishes.find(d=>normalizeName(d.name).toLowerCase()===name.toLowerCase());
       if(!exists){
         S.dishes.push({id:Date.now()+Math.random(),name,ingredients:'',kcal:0,prot:0,fat:0,carb:0,note:'из Yazio',liked:false,disliked:false});
       }
