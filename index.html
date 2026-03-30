@@ -435,11 +435,13 @@ select option{background:#1a1a2e;color:var(--text)}
         <label for="p-opened" style="font-size:13px;color:var(--text2);cursor:pointer">Упаковка уже вскрыта (срок сократится)</label>
       </div>
       <div class="ig"><label class="il">Дней после вскрытия (если указано на упаковке)</label><input type="number" id="p-afteropen" placeholder="оставь пустым для авто"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ADD PRODUCT — текстом -->
+      <div class="ig"><label class="il">Штрихкод (необязательно)</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="p-barcode" placeholder="4607186640291" style="flex:1">
+          <button onclick="scanBarcodeForPhoto()" style="background:none;border:0.5px solid var(--cb);border-radius:9px;padding:0 12px;color:var(--text2);cursor:pointer;font-size:13px;white-space:nowrap">📷 Скан</button>
+        </div>
+      </div>
+      <button class="bp" onclick="addProductForm()">Добавить в холодильник</button>
 <div class="scr" id="scr-add-text">
   <div class="si">
     <div class="card">
@@ -474,9 +476,13 @@ select option{background:#1a1a2e;color:var(--text)}
         <label for="pm-opened" style="font-size:13px;color:var(--text2);cursor:pointer">Упаковка уже вскрыта (срок сократится)</label>
       </div>
       <div class="ig"><label class="il">Дней после вскрытия (если указано на упаковке)</label><input type="number" id="pm-afteropen" placeholder="оставь пустым для авто"></div>
-    </div>
-  </div>
-</div>
+      <div class="ig"><label class="il">Штрихкод (необязательно)</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="pm-barcode" placeholder="4607186640291" style="flex:1">
+          <button onclick="scanBarcodeForManual()" style="background:none;border:0.5px solid var(--cb);border-radius:9px;padding:0 12px;color:var(--text2);cursor:pointer;font-size:13px;white-space:nowrap">📷 Скан</button>
+        </div>
+      </div>
+      <button class="bp" onclick="addProductManual()">Добавить в холодильник</button>
 
 <!-- ADD PRODUCT — штрихкод -->
 <div class="scr" id="scr-add-barcode">
@@ -782,47 +788,88 @@ function stopBarcodeScanner(){
 
 async function handleBarcode(code){
   stopBarcodeScanner();
-  document.getElementById('barcodeStatus').innerHTML=`<span class="spin"></span> Ищу ${code}...`;
-  document.getElementById('barcodeVideo').style.display='block';
+  code=code.trim();
+  if(!code){alert('Введи штрихкод');return;}
+  const statusEl=document.getElementById('barcodeStatus');
+  if(statusEl)statusEl.innerHTML=`<span class="spin"></span> Ищу ${code}...`;
+  const videoEl=document.getElementById('barcodeVideo');
+  if(videoEl)videoEl.style.display='block';
 
   // 1. Ищем в своей истории
   const fromHistory=S.productHistory?.find(p=>p.barcode===code);
   if(fromHistory){
     currentBarcodeProduct={...fromHistory};
     showBarcodeResult(currentBarcodeProduct,'📦 Найдено в твоей базе');
-    document.getElementById('barcodeVideo').style.display='none';
+    if(videoEl)videoEl.style.display='none';
     return;
   }
 
-  // 2. Ищем в Open Food Facts
+  // 2. Проверяем есть ли похожий продукт в холодильнике — предложим привязать штрихкод
+  // (будет показано после нахождения в OFF)
+
+  // 3. Ищем в Open Food Facts с таймаутом 8 секунд
   try{
-    const r=await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),8000);
+    // Пробуем сначала немецкую локализацию (ты в Германии)
+    const r=await fetch(
+      `https://world.openfoodfacts.org/api/v2/product/${code}?fields=product_name,product_name_de,product_name_ru,nutriments,image_url`,
+      {signal:controller.signal}
+    );
+    clearTimeout(timeout);
     const data=await r.json();
     if(data.status===1&&data.product){
       const p=data.product;
       const n=p.nutriments||{};
+      const name=p.product_name_de||p.product_name_ru||p.product_name||'Продукт '+code;
       currentBarcodeProduct={
         barcode:code,
-        name:p.product_name_ru||p.product_name||p.generic_name||'Продукт '+code,
+        name,
         kcal:Math.round(n['energy-kcal_100g']||n['energy_100g']/4.184||0),
         prot:Math.round((n.proteins_100g||0)*10)/10,
         fat:Math.round((n.fat_100g||0)*10)/10,
         carb:Math.round((n.carbohydrates_100g||0)*10)/10,
         fiber:Math.round((n.fiber_100g||0)*10)/10,
       };
-      currentBarcodeProduct.icon=getProductIcon(currentBarcodeProduct.name);
-      showBarcodeResult(currentBarcodeProduct,'🌐 Найдено в Open Food Facts');
+      currentBarcodeProduct.icon=getProductIcon(name);
+      // Ищем похожий продукт в холодильнике для привязки
+      const similar=S.products.find(p=>
+        p.name.toLowerCase().includes(name.toLowerCase().substring(0,8))||
+        name.toLowerCase().includes(p.name.toLowerCase().substring(0,8))
+      );
+      showBarcodeResult(currentBarcodeProduct,'🌐 Open Food Facts',similar);
     }else{
-      document.getElementById('barcodeVideo').style.display='none';
-      alert(`Штрихкод ${code} не найден. Добавь продукт вручную.`);
+      if(videoEl)videoEl.style.display='none';
+      if(statusEl)statusEl.innerHTML='';
+      // Не нашли — предлагаем добавить вручную с этим штрихкодом
+      showBarcodeNotFound(code);
     }
   }catch(e){
-    document.getElementById('barcodeVideo').style.display='none';
-    alert('Ошибка поиска. Проверь интернет.');
+    if(videoEl)videoEl.style.display='none';
+    if(statusEl)statusEl.innerHTML='';
+    if(e.name==='AbortError'){
+      showBarcodeNotFound(code,'Поиск занял слишком долго. Введи данные вручную.');
+    }else{
+      showBarcodeNotFound(code,'Ошибка соединения. Введи данные вручную.');
+    }
   }
 }
 
-function showBarcodeResult(p,source){
+function showBarcodeNotFound(code,msg){
+  const el=document.getElementById('barcodeFound');
+  if(el)el.innerHTML=`<div class="na">${msg||'Штрихкод '+code+' не найден в базе.'}</div>`;
+  // Заполняем поля для ручного ввода и переходим на ручную форму
+  document.getElementById('pm-barcode').value=code;
+  const res=document.getElementById('barcodeResult');
+  if(res)res.style.display='none';
+  subScreen('add-manual','Добавить вручную','add-barcode');
+}
+
+function showBarcodeResult(p,source,similar){
+  const linkBtn=similar?`<div style="margin-top:8px;padding:8px;background:rgba(129,140,248,0.1);border-radius:9px;font-size:12px;color:var(--text2)">
+    Похожий продукт в холодильнике: <b style="color:var(--text)">${esc(similar.name)}</b><br>
+    <button onclick="linkBarcodeToProduct(${similar.id})" style="margin-top:5px;background:none;border:0.5px solid rgba(129,140,248,0.4);color:#818cf8;padding:4px 10px;border-radius:20px;cursor:pointer;font-size:11px">Привязать штрихкод к этому продукту</button>
+  </div>`:'';
   document.getElementById('barcodeFound').innerHTML=`
     <div class="ng" style="margin-bottom:0">${source}</div>
     <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:0.5px solid var(--cb)">
@@ -831,8 +878,31 @@ function showBarcodeResult(p,source){
         <div style="font-size:14px;font-weight:500">${esc(p.name)}</div>
         <div style="font-size:11px;color:var(--text2);margin-top:2px">${p.kcal||0} ккал · Б${p.prot||0} Ж${p.fat||0} У${p.carb||0} /100г</div>
       </div>
-    </div>`;
+    </div>${linkBtn}`;
   document.getElementById('barcodeResult').style.display='block';
+}
+
+function linkBarcodeToProduct(productId){
+  const prod=S.products.find(p=>p.id===productId);
+  if(!prod||!currentBarcodeProduct?.barcode)return;
+  prod.barcode=currentBarcodeProduct.barcode;
+  // Обновляем историю
+  addToHistory({...prod});
+  save();
+  alert(`Штрихкод привязан к "${prod.name}". При следующем сканировании продукт найдётся автоматически.`);
+}
+
+function scanBarcodeForPhoto(){
+  // Запускаем сканер и при успехе заполняем поле p-barcode
+  const orig=currentBarcodeProduct;
+  subScreen('add-barcode','Сканировать штрихкод','add-photo');
+  // После сканирования вернёмся обратно
+  window._barcodeForForm='photo';
+}
+
+function scanBarcodeForManual(){
+  subScreen('add-barcode','Сканировать штрихкод','add-manual');
+  window._barcodeForForm='manual';
 }
 
 function addProductFromBarcode(){
@@ -970,9 +1040,10 @@ function addProductForm(){
       const fo=d.toISOString().split('T')[0];expiry=expiry<fo?expiry:fo;
     }else expiry=openedExpiry(expiry,name);
   }
+  const barcode=document.getElementById('p-barcode')?.value.trim()||null;
   const prod={id:Date.now(),name,icon:getProductIcon(name),
     weight:parseFloat(document.getElementById('p-weight').value)||0,
-    expiry,opened,afterOpenDays:afterOpenDays||null,
+    expiry,opened,afterOpenDays:afterOpenDays||null,barcode,
     kcal:parseFloat(document.getElementById('p-kcal').value)||0,
     prot:parseFloat(document.getElementById('p-prot').value)||0,
     fat:parseFloat(document.getElementById('p-fat').value)||0,
@@ -987,24 +1058,30 @@ function addProductManual(){
   const name=document.getElementById('pm-name').value.trim();
   if(!name){alert('Укажи название');return;}
   const opened=document.getElementById('pm-opened').checked;
+  const afterOpenDays=parseFloat(document.getElementById('pm-afteropen').value)||0;
   let expiry=parseExp(document.getElementById('pm-expiry').value);
   if(!expiry)expiry=autoExpiry(name,opened);
-  else if(opened)expiry=openedExpiry(expiry,name);
-  S.products.push({id:Date.now(),name,
+  else if(opened){
+    if(afterOpenDays>0){const d=new Date();d.setDate(d.getDate()+afterOpenDays);
+      const fo=d.toISOString().split('T')[0];expiry=expiry<fo?expiry:fo;
+    }else expiry=openedExpiry(expiry,name);
+  }
+  const barcode=document.getElementById('pm-barcode')?.value.trim()||null;
+  const prod={id:Date.now(),name,icon:getProductIcon(name),
     weight:parseFloat(document.getElementById('pm-weight').value)||0,
-    expiry,opened,
+    expiry,opened,afterOpenDays:afterOpenDays||null,barcode,
     kcal:parseFloat(document.getElementById('pm-kcal').value)||0,
     prot:parseFloat(document.getElementById('pm-prot').value)||0,
     fat:parseFloat(document.getElementById('pm-fat').value)||0,
-    carb:parseFloat(document.getElementById('pm-carb').value)||0,
-    icon:'🥗'});
-  save();
-  clearManualForm();
+    carb:parseFloat(document.getElementById('pm-carb').value)||0};
+  S.products.push(prod);
+  addToHistory(prod);
+  save();clearManualForm();
   subScreen('add-product','Добавить продукт','products');
 }
 
 function clearManualForm(){
-  ['pm-name','pm-weight','pm-expiry','pm-kcal','pm-prot','pm-fat','pm-carb'].forEach(id=>{
+  ['pm-name','pm-weight','pm-expiry','pm-kcal','pm-prot','pm-fat','pm-carb','pm-barcode','pm-afteropen'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
   const cb=document.getElementById('pm-opened');if(cb)cb.checked=false;
@@ -2212,7 +2289,7 @@ renderMenu();
 if(S.settings.apikey&&S.settings.githubUser)setTimeout(loadYazio,1500);
 
 if('serviceWorker'in navigator){window.addEventListener('load',()=>{
-  const APP_VERSION='1.5.0';
+  const APP_VERSION='1.5.1';
   const sw=`
 const VERSION='${APP_VERSION}';
 const CACHE='nutrition-'+VERSION;
