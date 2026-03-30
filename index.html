@@ -483,6 +483,9 @@ select option{background:#1a1a2e;color:var(--text)}
         </div>
       </div>
       <button class="bp" onclick="addProductManual()">Добавить в холодильник</button>
+    </div>
+  </div>
+</div>
 
 <!-- ADD PRODUCT — штрихкод -->
 <div class="scr" id="scr-add-barcode">
@@ -2289,7 +2292,7 @@ renderMenu();
 if(S.settings.apikey&&S.settings.githubUser)setTimeout(loadYazio,1500);
 
 if('serviceWorker'in navigator){window.addEventListener('load',()=>{
-  const APP_VERSION='1.5.1';
+  const APP_VERSION='1.5.2';
   const sw=`
 const VERSION='${APP_VERSION}';
 const CACHE='nutrition-'+VERSION;
