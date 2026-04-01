@@ -668,12 +668,47 @@ function switchNav(name,btn){
   document.getElementById('mainNav').style.display='flex';
   document.getElementById('refreshBtn').style.display=name==='menu'?'flex':'none';
   document.getElementById('hTitle').textContent='Моё питание';
+  // Сбрасываем историю при переходе на основную вкладку
+  history.replaceState({screen:name,main:true},'',location.href.split('#')[0]);
   show(name);
   if(name==='products')renderProducts();
-  if(name==='menu')renderMenu();
   if(name==='dishes')renderDishes();
   if(name==='gut')renderGut();
 }
+
+// Перехватываем кнопку назад смартфона
+window.addEventListener('popstate',e=>{
+  if(e.state&&e.state.screen&&!e.state.main){
+    // Браузер уже перешёл назад в истории — нам нужно показать предыдущий экран
+    const prev=e.state.prev||curNav()||'menu';
+    if(['menu','products','dishes','gut','chat','tips','settings'].includes(prev)){
+      // Возвращаемся на основную вкладку
+      S.prevScreen=prev;
+      document.getElementById('backBtn').style.display='none';
+      document.getElementById('mainNav').style.display='flex';
+      document.getElementById('refreshBtn').style.display=prev==='menu'?'flex':'none';
+      document.getElementById('hTitle').textContent='Моё питание';
+      const nb=document.getElementById('nav-'+prev);
+      document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+      if(nb)nb.classList.add('active');
+      history.replaceState({screen:prev,main:true},'',location.href.split('#')[0]);
+      show(prev);
+      if(prev==='products')renderProducts();
+      if(prev==='dishes')renderDishes();
+      if(prev==='gut')renderGut();
+      if(prev==='menu')renderMenu();
+    }else{
+      // Возвращаемся на подэкран
+      S.prevScreen=e.state.prev||'';
+      document.getElementById('hTitle').textContent=e.state.title||'';
+      show(prev);
+    }
+  }else{
+    // Нет состояния — возвращаемся на меню чтобы не выйти из приложения
+    history.pushState({screen:'menu',main:true},'',location.href.split('#')[0]);
+    goBack();
+  }
+});
 
 function subScreen(name,title,prev){
   S.prevScreen=prev||curNav()||'menu';
@@ -681,6 +716,7 @@ function subScreen(name,title,prev){
   document.getElementById('mainNav').style.display='none';
   document.getElementById('refreshBtn').style.display='none';
   document.getElementById('hTitle').textContent=title;
+  history.pushState({screen:name,title,prev:S.prevScreen},'',location.href.split('#')[0]+'#'+name);
   show(name);
 }
 
