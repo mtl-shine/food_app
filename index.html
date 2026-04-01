@@ -2297,28 +2297,12 @@ renderMenu();
 if(S.settings.apikey&&S.settings.githubUser)setTimeout(loadYazio,1500);
 
 if('serviceWorker'in navigator){window.addEventListener('load',()=>{
-  const APP_VERSION='1.5.3';
-  const sw=`
-const VERSION='${APP_VERSION}';
-const CACHE='nutrition-'+VERSION;
-self.addEventListener('install',e=>{
-  e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./'])).then(()=>self.skipWaiting()));
-});
-self.addEventListener('activate',e=>{
-  e.waitUntil(caches.keys().then(keys=>Promise.all(
-    keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))
-  )).then(()=>self.clients.claim()));
-});
-self.addEventListener('fetch',e=>{
-  e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(resp=>{
-    if(resp&&resp.status===200&&e.request.method==='GET'){
-      const clone=resp.clone();
-      caches.open(CACHE).then(c=>c.put(e.request,clone));
-    }
-    return resp;
-  })));
-});`;
-  navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'application/javascript'}))).catch(()=>{});
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    reg.onupdatefound=()=>{
+      const sw=reg.installing;
+      sw.onstatechange=()=>{if(sw.state==='installed'&&navigator.serviceWorker.controller)console.log('Новая версия доступна');};
+    };
+  }).catch(()=>{});
 });}
 </script>
 </body>
