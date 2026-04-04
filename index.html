@@ -168,6 +168,7 @@ select option{background:#1a1a2e;color:var(--text)}
   <button class="back" id="backBtn" onclick="goBack()">←</button>
   <h1 id="hTitle">Моё питание</h1>
   <div class="ha">
+    <span id="appVersion" style="font-size:10px;color:var(--text2);opacity:0.5;margin-right:2px;align-self:center"></span>
     <button class="ib" id="refreshBtn" onclick="generateWeekMenu()" style="display:none" title="Пересоставить">↺</button>
     <button class="ib" onclick="switchToSettings()">⚙</button>
   </div>
@@ -404,17 +405,27 @@ select option{background:#1a1a2e;color:var(--text)}
   </div>
 </div>
 
+
 <!-- ADD PRODUCT — фото -->
 <div class="scr" id="scr-add-photo">
   <div class="si">
     <div class="card">
-      <div class="pz" onclick="document.getElementById('photoInput').click()">
-        <div class="ph">📷</div>
-        <div class="pt">Сфотографировать упаковку<br><span style="font-size:10px;opacity:0.6">Claude распознает название, КБЖУ и срок годности</span></div>
-        <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="processPhoto(event)">
+      <!-- Зона добавления фото -->
+      <div id="photoZones">
+        <div class="pz" onclick="document.getElementById('photoInput').click()">
+          <div class="ph">📷</div>
+          <div class="pt">Сфотографировать упаковку<br><span style="font-size:10px;opacity:0.6">Можно добавить несколько фото — фронт, оборот, состав</span></div>
+          <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="addPhotoToQueue(event)">
+        </div>
       </div>
-      <div id="photoPreview" style="display:none;margin-bottom:12px">
-        <img id="previewImg" style="width:100%;border-radius:9px;max-height:160px;object-fit:cover">
+      <!-- Очередь фото -->
+      <div id="photoQueue" style="display:none;margin-bottom:8px">
+        <div id="photoQueueList" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <button onclick="document.getElementById('photoInputMore').click()" class="bs" style="flex:1;font-size:12px">+ Ещё фото</button>
+          <button onclick="processAllPhotos()" class="bp" style="flex:1;font-size:12px" id="analyzeBtn">🔍 Распознать всё</button>
+          <input type="file" id="photoInputMore" accept="image/*" capture="environment" style="display:none" onchange="addPhotoToQueue(event)">
+        </div>
         <div id="recStatus" style="text-align:center;padding:7px;font-size:12px;color:var(--text2)"></div>
       </div>
       <div class="ig"><label class="il">Название *</label><input type="text" id="p-name" placeholder="Куриная грудка"></div>
@@ -422,24 +433,85 @@ select option{background:#1a1a2e;color:var(--text)}
         <div class="ig"><label class="il">Вес (г)</label><input type="number" id="p-weight" placeholder="500"></div>
         <div class="ig"><label class="il">Срок годности</label><input type="text" id="p-expiry" placeholder="31.12.2025"></div>
       </div>
+      <!-- Основные макронутриенты — обязательные -->
+      <div style="font-size:11px;color:var(--text2);margin:6px 0 2px">На 100г — обязательные</div>
       <div class="ir">
-        <div class="ig"><label class="il">Ккал/100г</label><input type="number" id="p-kcal" placeholder="165"></div>
-        <div class="ig"><label class="il">Белки/100г</label><input type="number" id="p-prot" placeholder="31"></div>
+        <div class="ig"><label class="il">Ккал *</label><input type="number" id="p-kcal" placeholder="165"></div>
+        <div class="ig"><label class="il">Белки (г) *</label><input type="number" id="p-prot" placeholder="31"></div>
       </div>
       <div class="ir">
-        <div class="ig"><label class="il">Жиры/100г</label><input type="number" id="p-fat" placeholder="3.6"></div>
-        <div class="ig"><label class="il">Углев./100г</label><input type="number" id="p-carb" placeholder="0"></div>
+        <div class="ig"><label class="il">Жиры (г) *</label><input type="number" id="p-fat" placeholder="3.6"></div>
+        <div class="ig"><label class="il">Углев. (г) *</label><input type="number" id="p-carb" placeholder="0"></div>
       </div>
-      <div class="ig" style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+      <!-- Расширенные поля — сворачиваемые -->
+      <div onclick="toggleExpanded('p')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:0.5px solid var(--cb);margin-top:6px">
+        <span style="font-size:12px;color:var(--text2)">Подробный состав (остальное заполнит Claude)</span>
+        <span id="p-expand-icon" style="font-size:12px;color:var(--text2)">▸</span>
+      </div>
+      <div id="p-expanded" style="display:none">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Жиры (г/100г)</div>
+        <div class="ir">
+          <div class="ig"><label class="il">Насыщенные</label><input type="number" id="p-fat-sat" placeholder="авто"></div>
+          <div class="ig"><label class="il">Мононенас.</label><input type="number" id="p-fat-mono" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Полиненас.</label><input type="number" id="p-fat-poly" placeholder="авто"></div>
+          <div class="ig"><label class="il">Трансжиры</label><input type="number" id="p-fat-trans" placeholder="авто"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin:6px 0 4px">Углеводы (г/100г)</div>
+        <div class="ir">
+          <div class="ig"><label class="il">Сахар</label><input type="number" id="p-sugar" placeholder="авто"></div>
+          <div class="ig"><label class="il">Клетчатка</label><input type="number" id="p-fiber" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Крахмал</label><input type="number" id="p-starch" placeholder="авто"></div>
+          <div class="ig"><label class="il">Сах. спирты</label><input type="number" id="p-polyols" placeholder="авто"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin:6px 0 4px">Прочее</div>
+        <div class="ir">
+          <div class="ig"><label class="il">Соль (г)</label><input type="number" id="p-salt" placeholder="авто"></div>
+          <div class="ig"><label class="il">Холестерин (мг)</label><input type="number" id="p-chol" placeholder="авто"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin:6px 0 4px">Витамины (мкг или мг/100г)</div>
+        <div class="ir">
+          <div class="ig"><label class="il">Вит. A (мкг)</label><input type="number" id="p-va" placeholder="авто"></div>
+          <div class="ig"><label class="il">Вит. B1 (мг)</label><input type="number" id="p-vb1" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Вит. B2 (мг)</label><input type="number" id="p-vb2" placeholder="авто"></div>
+          <div class="ig"><label class="il">Вит. B6 (мг)</label><input type="number" id="p-vb6" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Вит. B12 (мкг)</label><input type="number" id="p-vb12" placeholder="авто"></div>
+          <div class="ig"><label class="il">Вит. C (мг)</label><input type="number" id="p-vc" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Вит. D (мкг)</label><input type="number" id="p-vd" placeholder="авто"></div>
+          <div class="ig"><label class="il">Вит. E (мг)</label><input type="number" id="p-ve" placeholder="авто"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin:6px 0 4px">Минералы (мг/100г)</div>
+        <div class="ir">
+          <div class="ig"><label class="il">Железо</label><input type="number" id="p-fe" placeholder="авто"></div>
+          <div class="ig"><label class="il">Кальций</label><input type="number" id="p-ca" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Магний</label><input type="number" id="p-mg" placeholder="авто"></div>
+          <div class="ig"><label class="il">Цинк</label><input type="number" id="p-zn" placeholder="авто"></div>
+        </div>
+      </div>
+      <div class="ig" style="display:flex;align-items:center;gap:9px;margin-top:6px">
         <input type="checkbox" id="p-opened" style="width:18px;height:18px;flex-shrink:0">
-        <label for="p-opened" style="font-size:13px;color:var(--text2);cursor:pointer">Упаковка уже вскрыта (срок сократится)</label>
+        <label for="p-opened" style="font-size:13px;color:var(--text2);cursor:pointer">Упаковка уже вскрыта</label>
       </div>
-      <div class="ig"><label class="il">Дней после вскрытия (если указано на упаковке)</label><input type="number" id="p-afteropen" placeholder="оставь пустым для авто"></div>
-      <div class="ig"><label class="il">Штрихкод (необязательно)</label>
+      <div class="ig"><label class="il">Дней после вскрытия</label><input type="number" id="p-afteropen" placeholder="авто"></div>
+      <div class="ig"><label class="il">Штрихкод</label>
         <div style="display:flex;gap:8px">
           <input type="text" id="p-barcode" placeholder="4607186640291" style="flex:1">
           <button onclick="scanBarcodeForPhoto()" style="background:none;border:0.5px solid var(--cb);border-radius:9px;padding:0 12px;color:var(--text2);cursor:pointer;font-size:13px;white-space:nowrap">📷 Скан</button>
         </div>
+      </div>
+      <div class="ig"><label class="il">Дополнительно (состав, ГИ, аминокислоты и др.)</label>
+        <textarea id="p-notes" placeholder="Например: ГИ 55, содержит пробиотики, источник омега-3..." style="min-height:55px"></textarea>
       </div>
       <button class="bp" onclick="addProductForm()">Добавить в холодильник</button>
     </div>
@@ -468,24 +540,83 @@ select option{background:#1a1a2e;color:var(--text)}
         <div class="ig"><label class="il">Вес (г)</label><input type="number" id="pm-weight" placeholder="500"></div>
         <div class="ig"><label class="il">Срок годности</label><input type="text" id="pm-expiry" placeholder="31.12.2025"></div>
       </div>
+      <div style="font-size:11px;color:var(--text2);margin:6px 0 2px">На 100г — обязательные</div>
       <div class="ir">
-        <div class="ig"><label class="il">Ккал/100г</label><input type="number" id="pm-kcal" placeholder="165"></div>
-        <div class="ig"><label class="il">Белки/100г</label><input type="number" id="pm-prot" placeholder="31"></div>
+        <div class="ig"><label class="il">Ккал *</label><input type="number" id="pm-kcal" placeholder="165"></div>
+        <div class="ig"><label class="il">Белки (г) *</label><input type="number" id="pm-prot" placeholder="31"></div>
       </div>
       <div class="ir">
-        <div class="ig"><label class="il">Жиры/100г</label><input type="number" id="pm-fat" placeholder="3.6"></div>
-        <div class="ig"><label class="il">Углев./100г</label><input type="number" id="pm-carb" placeholder="0"></div>
+        <div class="ig"><label class="il">Жиры (г) *</label><input type="number" id="pm-fat" placeholder="3.6"></div>
+        <div class="ig"><label class="il">Углев. (г) *</label><input type="number" id="pm-carb" placeholder="0"></div>
       </div>
-      <div class="ig" style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+      <div onclick="toggleExpanded('pm')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:0.5px solid var(--cb);margin-top:6px">
+        <span style="font-size:12px;color:var(--text2)">Подробный состав (остальное заполнит Claude)</span>
+        <span id="pm-expand-icon" style="font-size:12px;color:var(--text2)">▸</span>
+      </div>
+      <div id="pm-expanded" style="display:none">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Жиры (г/100г)</div>
+        <div class="ir">
+          <div class="ig"><label class="il">Насыщенные</label><input type="number" id="pm-fat-sat" placeholder="авто"></div>
+          <div class="ig"><label class="il">Мононенас.</label><input type="number" id="pm-fat-mono" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Полиненас.</label><input type="number" id="pm-fat-poly" placeholder="авто"></div>
+          <div class="ig"><label class="il">Трансжиры</label><input type="number" id="pm-fat-trans" placeholder="авто"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin:6px 0 4px">Углеводы (г/100г)</div>
+        <div class="ir">
+          <div class="ig"><label class="il">Сахар</label><input type="number" id="pm-sugar" placeholder="авто"></div>
+          <div class="ig"><label class="il">Клетчатка</label><input type="number" id="pm-fiber" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Крахмал</label><input type="number" id="pm-starch" placeholder="авто"></div>
+          <div class="ig"><label class="il">Сах. спирты</label><input type="number" id="pm-polyols" placeholder="авто"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin:6px 0 4px">Прочее</div>
+        <div class="ir">
+          <div class="ig"><label class="il">Соль (г)</label><input type="number" id="pm-salt" placeholder="авто"></div>
+          <div class="ig"><label class="il">Холестерин (мг)</label><input type="number" id="pm-chol" placeholder="авто"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin:6px 0 4px">Витамины</div>
+        <div class="ir">
+          <div class="ig"><label class="il">Вит. A (мкг)</label><input type="number" id="pm-va" placeholder="авто"></div>
+          <div class="ig"><label class="il">Вит. B1 (мг)</label><input type="number" id="pm-vb1" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Вит. B2 (мг)</label><input type="number" id="pm-vb2" placeholder="авто"></div>
+          <div class="ig"><label class="il">Вит. B6 (мг)</label><input type="number" id="pm-vb6" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Вит. B12 (мкг)</label><input type="number" id="pm-vb12" placeholder="авто"></div>
+          <div class="ig"><label class="il">Вит. C (мг)</label><input type="number" id="pm-vc" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Вит. D (мкг)</label><input type="number" id="pm-vd" placeholder="авто"></div>
+          <div class="ig"><label class="il">Вит. E (мг)</label><input type="number" id="pm-ve" placeholder="авто"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin:6px 0 4px">Минералы (мг/100г)</div>
+        <div class="ir">
+          <div class="ig"><label class="il">Железо</label><input type="number" id="pm-fe" placeholder="авто"></div>
+          <div class="ig"><label class="il">Кальций</label><input type="number" id="pm-ca" placeholder="авто"></div>
+        </div>
+        <div class="ir">
+          <div class="ig"><label class="il">Магний</label><input type="number" id="pm-mg" placeholder="авто"></div>
+          <div class="ig"><label class="il">Цинк</label><input type="number" id="pm-zn" placeholder="авто"></div>
+        </div>
+      </div>
+      <div class="ig" style="display:flex;align-items:center;gap:9px;margin-top:6px">
         <input type="checkbox" id="pm-opened" style="width:18px;height:18px;flex-shrink:0">
-        <label for="pm-opened" style="font-size:13px;color:var(--text2);cursor:pointer">Упаковка уже вскрыта (срок сократится)</label>
+        <label for="pm-opened" style="font-size:13px;color:var(--text2);cursor:pointer">Упаковка уже вскрыта</label>
       </div>
-      <div class="ig"><label class="il">Дней после вскрытия (если указано на упаковке)</label><input type="number" id="pm-afteropen" placeholder="оставь пустым для авто"></div>
-      <div class="ig"><label class="il">Штрихкод (необязательно)</label>
+      <div class="ig"><label class="il">Дней после вскрытия</label><input type="number" id="pm-afteropen" placeholder="авто"></div>
+      <div class="ig"><label class="il">Штрихкод</label>
         <div style="display:flex;gap:8px">
           <input type="text" id="pm-barcode" placeholder="4607186640291" style="flex:1">
           <button onclick="scanBarcodeForManual()" style="background:none;border:0.5px solid var(--cb);border-radius:9px;padding:0 12px;color:var(--text2);cursor:pointer;font-size:13px;white-space:nowrap">📷 Скан</button>
         </div>
+      </div>
+      <div class="ig"><label class="il">Дополнительно (состав, ГИ, аминокислоты и др.)</label>
+        <textarea id="pm-notes" placeholder="Например: ГИ 55, содержит пробиотики, источник омега-3..." style="min-height:55px"></textarea>
       </div>
       <button class="bp" onclick="addProductManual()">Добавить в холодильник</button>
     </div>
@@ -643,6 +774,14 @@ let S={
 
 function load(){try{const d=localStorage.getItem('np_v4');if(d)S=Object.assign(S,JSON.parse(d));}catch(e){}}
 function save(){try{localStorage.setItem('np_v4',JSON.stringify(S));}catch(e){}}
+
+function addToHistory(p){
+  if(!S.productHistory)S.productHistory=[];
+  const idx=S.productHistory.findIndex(x=>x.name.toLowerCase()===p.name.toLowerCase());
+  const entry={name:p.name,icon:p.icon||getProductIcon(p.name),kcal:p.kcal,prot:p.prot,fat:p.fat,carb:p.carb,barcode:p.barcode||null};
+  if(idx>=0)S.productHistory[idx]=entry;
+  else S.productHistory.push(entry);
+}
 
 /* ── API ── */
 async function claude(messages,system,maxTok){
@@ -1072,9 +1211,14 @@ function openedExpiry(expiry,productName){
   return(fromOpen<onPack?fromOpen:onPack).toISOString().split('T')[0];
 }
 
-function addProductForm(){
+async function addProductForm(){
   const name=document.getElementById('p-name').value.trim();
   if(!name){alert('Укажи название');return;}
+  const kcal=parseFloat(document.getElementById('p-kcal').value)||0;
+  const prot=parseFloat(document.getElementById('p-prot').value)||0;
+  const fat=parseFloat(document.getElementById('p-fat').value)||0;
+  const carb=parseFloat(document.getElementById('p-carb').value)||0;
+  if(!kcal&&!prot&&!fat&&!carb){if(!confirm('Основные нутриенты не заполнены. Продолжить?'))return;}
   const opened=document.getElementById('p-opened').checked;
   const afterOpenDays=parseFloat(document.getElementById('p-afteropen').value)||0;
   let expiry=parseExp(document.getElementById('p-expiry').value);
@@ -1085,22 +1229,29 @@ function addProductForm(){
     }else expiry=openedExpiry(expiry,name);
   }
   const barcode=document.getElementById('p-barcode')?.value.trim()||null;
-  const prod={id:Date.now(),name,icon:getProductIcon(name),
+  let prod={id:Date.now(),name,icon:getProductIcon(name),
     weight:parseFloat(document.getElementById('p-weight').value)||0,
     expiry,opened,afterOpenDays:afterOpenDays||null,barcode,
-    kcal:parseFloat(document.getElementById('p-kcal').value)||0,
-    prot:parseFloat(document.getElementById('p-prot').value)||0,
-    fat:parseFloat(document.getElementById('p-fat').value)||0,
-    carb:parseFloat(document.getElementById('p-carb').value)||0};
+    kcal,prot,fat,carb,...readNutrition('p')};
+  // Кнопка — показываем загрузку
+  const btn=document.querySelector('#scr-add-photo .bp[onclick="addProductForm()"]');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Обогащаю данные...';}
+  prod=await enrichProductData(prod);
+  if(btn){btn.disabled=false;btn.innerHTML='Добавить в холодильник';}
   S.products.push(prod);
   addToHistory(prod);
   save();clearPForm();
   subScreen('add-product','Добавить продукт','products');
 }
 
-function addProductManual(){
+async function addProductManual(){
   const name=document.getElementById('pm-name').value.trim();
   if(!name){alert('Укажи название');return;}
+  const kcal=parseFloat(document.getElementById('pm-kcal').value)||0;
+  const prot=parseFloat(document.getElementById('pm-prot').value)||0;
+  const fat=parseFloat(document.getElementById('pm-fat').value)||0;
+  const carb=parseFloat(document.getElementById('pm-carb').value)||0;
+  if(!kcal&&!prot&&!fat&&!carb){if(!confirm('Основные нутриенты не заполнены. Claude заполнит их автоматически. Продолжить?'))return;}
   const opened=document.getElementById('pm-opened').checked;
   const afterOpenDays=parseFloat(document.getElementById('pm-afteropen').value)||0;
   let expiry=parseExp(document.getElementById('pm-expiry').value);
@@ -1111,13 +1262,14 @@ function addProductManual(){
     }else expiry=openedExpiry(expiry,name);
   }
   const barcode=document.getElementById('pm-barcode')?.value.trim()||null;
-  const prod={id:Date.now(),name,icon:getProductIcon(name),
+  let prod={id:Date.now(),name,icon:getProductIcon(name),
     weight:parseFloat(document.getElementById('pm-weight').value)||0,
     expiry,opened,afterOpenDays:afterOpenDays||null,barcode,
-    kcal:parseFloat(document.getElementById('pm-kcal').value)||0,
-    prot:parseFloat(document.getElementById('pm-prot').value)||0,
-    fat:parseFloat(document.getElementById('pm-fat').value)||0,
-    carb:parseFloat(document.getElementById('pm-carb').value)||0};
+    kcal,prot,fat,carb,...readNutrition('pm')};
+  const btn=document.querySelector('#scr-add-manual .bp');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Обогащаю данные...';}
+  prod=await enrichProductData(prod);
+  if(btn){btn.disabled=false;btn.innerHTML='Добавить в холодильник';}
   S.products.push(prod);
   addToHistory(prod);
   save();clearManualForm();
@@ -1125,10 +1277,15 @@ function addProductManual(){
 }
 
 function clearManualForm(){
-  ['pm-name','pm-weight','pm-expiry','pm-kcal','pm-prot','pm-fat','pm-carb','pm-barcode','pm-afteropen'].forEach(id=>{
+  ['pm-name','pm-weight','pm-expiry','pm-kcal','pm-prot','pm-fat','pm-carb','pm-barcode','pm-afteropen',
+   'pm-fat-sat','pm-fat-mono','pm-fat-poly','pm-fat-trans','pm-sugar','pm-fiber','pm-starch','pm-polyols',
+   'pm-salt','pm-chol','pm-va','pm-vb1','pm-vb2','pm-vb6','pm-vb12','pm-vc','pm-vd','pm-ve',
+   'pm-fe','pm-ca','pm-mg','pm-zn','pm-notes'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
   const cb=document.getElementById('pm-opened');if(cb)cb.checked=false;
+  const exp=document.getElementById('pm-expanded');if(exp)exp.style.display='none';
+  const icon=document.getElementById('pm-expand-icon');if(icon)icon.textContent='▸';
 }
 
 /* Кнопка "вскрыть" на карточке продукта */
@@ -2142,45 +2299,193 @@ ${ingredients?'Ингредиенты из базы: '+ingredients:'Продук
 }
 
 /* ── PHOTO ── */
-async function processPhoto(event){
-  const file=event.target.files[0];if(!file)return;
-  const preview=document.getElementById('photoPreview'),img=document.getElementById('previewImg'),status=document.getElementById('recStatus');
-  preview.style.display='block';img.src=URL.createObjectURL(file);
-  status.innerHTML='<span class="spin"></span> Распознаю...';
-  if(!S.settings.apikey){status.textContent='Укажи API ключ.';return;}
-  const reader=new FileReader();
-  reader.onload=async(e)=>{
-    const b64=e.target.result.split(',')[1];
-    try{
-      const r=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-api-key':S.settings.apikey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:file.type,data:b64}},
-          {type:'text',text:'Фото продукта/упаковки. ТОЛЬКО JSON без markdown:\n{"name":"...","weight":число_или_null,"expiry":"YYYY-MM-DD или null","kcal":0,"prot":0,"fat":0,"carb":0,"icon":"emoji"}\nВес и срок — если видны на упаковке, иначе null. КБЖУ на 100г — если видны на этикетке бери точные значения, если текст не читается — определи продукт визуально и укажи средние значения из базы знаний. Никогда не возвращай нули.'}
-        ]}]})
-      });
-      const d=await r.json();
-      const data=JSON.parse((d.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
-      if(data.name){
-        document.getElementById('p-name').value=data.name;
-        document.getElementById('p-weight').value=data.weight||'';
-        document.getElementById('p-expiry').value=data.expiry?new Date(data.expiry).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
-        document.getElementById('p-kcal').value=data.kcal||'';document.getElementById('p-prot').value=data.prot||'';
-        document.getElementById('p-fat').value=data.fat||'';document.getElementById('p-carb').value=data.carb||'';
-        const approx=(!data.kcal||data.kcal===0);
-        status.innerHTML=approx
-          ?'✓ Продукт распознан — КБЖУ заполнено приблизительно, проверь'
-          :'✓ Проверь и скорректируй';
-        status.style.color=approx?'var(--acc2)':'#4ade80';
-      }else status.textContent='Не удалось распознать. Заполни вручную.';
-    }catch(err){status.textContent='Ошибка. Заполни вручную.';}
-  };
-  reader.readAsDataURL(file);event.target.value='';
+/* ── ФОТО ПРОДУКТА ── */
+let photoQueue=[];
+
+function addPhotoToQueue(event){
+  const files=Array.from(event.target.files);
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const b64=e.target.result.split(',')[1];
+      const id=Date.now()+Math.random();
+      photoQueue.push({id,file,b64,mediaType:file.type});
+      renderPhotoQueue();
+    };
+    reader.readAsDataURL(file);
+  });
+  event.target.value='';
+  // Скрываем начальную зону и показываем очередь
+  document.getElementById('photoZones').style.display='none';
+  document.getElementById('photoQueue').style.display='block';
 }
 
+function renderPhotoQueue(){
+  const list=document.getElementById('photoQueueList');
+  list.innerHTML=photoQueue.map((p,i)=>`
+    <div style="position:relative;width:72px;height:72px;flex-shrink:0">
+      <img src="data:${p.mediaType};base64,${p.b64}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:0.5px solid var(--cb)">
+      <button onclick="removePhoto(${i})" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:var(--acc);border:none;color:white;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">×</button>
+    </div>`).join('');
+}
+
+function removePhoto(idx){
+  photoQueue.splice(idx,1);
+  if(photoQueue.length===0){
+    document.getElementById('photoZones').style.display='block';
+    document.getElementById('photoQueue').style.display='none';
+  }else renderPhotoQueue();
+}
+
+async function processAllPhotos(){
+  if(!photoQueue.length){alert('Добавь хотя бы одно фото');return;}
+  if(!S.settings.apikey){document.getElementById('recStatus').textContent='Укажи API ключ.';return;}
+  const btn=document.getElementById('analyzeBtn');
+  const status=document.getElementById('recStatus');
+  btn.disabled=true;btn.innerHTML='<span class="spin"></span> Анализирую...';
+  status.innerHTML='';
+
+  try{
+    // Отправляем все фото одним запросом
+    const content=[];
+    photoQueue.forEach((p,i)=>{
+      content.push({type:'image',source:{type:'base64',media_type:p.mediaType,data:p.b64}});
+      content.push({type:'text',text:i===0?'Фото упаковки продукта (возможно несколько сторон):':'Ещё одна сторона упаковки:'});
+    });
+    content.push({type:'text',text:`Изучи все фото и извлеки максимум данных. ТОЛЬКО JSON без markdown:
+{
+  "name":"...","weight":null,"expiry":"YYYY-MM-DD или null",
+  "composition":"полный состав если виден, иначе null",
+  "kcal":0,"prot":0,"fat":0,"carb":0,
+  "fatSat":null,"fatMono":null,"fatPoly":null,"fatTrans":null,
+  "sugar":null,"fiber":null,"starch":null,"polyols":null,
+  "salt":null,"chol":null,
+  "vitA":null,"vitB1":null,"vitB2":null,"vitB6":null,"vitB12":null,"vitC":null,"vitD":null,"vitE":null,
+  "fe":null,"ca":null,"mg":null,"zn":null,
+  "notes":null,"icon":"emoji"
+}
+Правила: бери точные значения с этикетки. Если поле не видно — null. Не перезаписывай точные данные из таблицы данными из состава. Никогда не возвращай нули для КБЖУ если продукт распознан.`});
+
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':S.settings.apikey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content}]})
+    });
+    const d=await r.json();
+    const data=JSON.parse((d.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
+
+    if(data.name){
+      document.getElementById('p-name').value=data.name;
+      document.getElementById('p-weight').value=data.weight||'';
+      document.getElementById('p-expiry').value=data.expiry?new Date(data.expiry).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+      document.getElementById('p-kcal').value=data.kcal||'';
+      document.getElementById('p-prot').value=data.prot||'';
+      document.getElementById('p-fat').value=data.fat||'';
+      document.getElementById('p-carb').value=data.carb||'';
+      const fields={
+        'p-fat-sat':'fatSat','p-fat-mono':'fatMono','p-fat-poly':'fatPoly','p-fat-trans':'fatTrans',
+        'p-sugar':'sugar','p-fiber':'fiber','p-starch':'starch','p-polyols':'polyols',
+        'p-salt':'salt','p-chol':'chol',
+        'p-va':'vitA','p-vb1':'vitB1','p-vb2':'vitB2','p-vb6':'vitB6','p-vb12':'vitB12',
+        'p-vc':'vitC','p-vd':'vitD','p-ve':'vitE','p-fe':'fe','p-ca':'ca','p-mg':'mg','p-zn':'zn'
+      };
+      let hasExtended=false;
+      Object.entries(fields).forEach(([id,key])=>{
+        if(data[key]!=null){const el=document.getElementById(id);if(el){el.value=data[key];hasExtended=true;}}
+      });
+      const notesEl=document.getElementById('p-notes');
+      if(notesEl){
+        const parts=[];
+        if(data.composition)parts.push('Состав: '+data.composition);
+        if(data.notes)parts.push(data.notes);
+        if(parts.length)notesEl.value=parts.join('\n');
+      }
+      if(hasExtended){
+        const exp=document.getElementById('p-expanded');const icon=document.getElementById('p-expand-icon');
+        if(exp)exp.style.display='block';if(icon)icon.textContent='▾';
+      }
+      const approx=(!data.kcal||data.kcal===0);
+      status.innerHTML=approx?'✓ Распознано — КБЖУ приблизительно, проверь и дополни':'✓ Данные заполнены — проверь и при необходимости скорректируй';
+      status.style.color=approx?'var(--acc2)':'#4ade80';
+    }else{
+      status.textContent='Не удалось распознать. Заполни поля вручную.';
+      status.style.color='var(--acc)';
+    }
+  }catch(err){
+    status.textContent='Ошибка распознавания. Попробуй ещё раз или заполни вручную.';
+    status.style.color='var(--acc)';
+  }
+  btn.disabled=false;btn.innerHTML='🔍 Распознать всё';
+}
+
+// Очистка очереди фото при сбросе формы
+function clearPhotoQueue(){
+  photoQueue=[];
+  document.getElementById('photoZones').style.display='block';
+  document.getElementById('photoQueue').style.display='none';
+  document.getElementById('photoQueueList').innerHTML='';
+  document.getElementById('recStatus').innerHTML='';
+}
 /* ── ADD PRODUCT ── */
-function clearPForm(){['p-name','p-weight','p-expiry','p-kcal','p-prot','p-fat','p-carb'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});const cb=document.getElementById('p-opened');if(cb)cb.checked=false;document.getElementById('photoPreview').style.display='none';}
+function toggleExpanded(prefix){
+  const el=document.getElementById(prefix+'-expanded');
+  const icon=document.getElementById(prefix+'-expand-icon');
+  if(!el)return;
+  const open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  if(icon)icon.textContent=open?'▾':'▸';
+}
+
+function readNutrition(prefix){
+  const g=id=>parseFloat(document.getElementById(id)?.value)||null;
+  const t=id=>document.getElementById(id)?.value.trim()||null;
+  return{
+    kcal:g(prefix+'-kcal'),prot:g(prefix+'-prot'),fat:g(prefix+'-fat'),carb:g(prefix+'-carb'),
+    fatSat:g(prefix+'-fat-sat'),fatMono:g(prefix+'-fat-mono'),fatPoly:g(prefix+'-fat-poly'),fatTrans:g(prefix+'-fat-trans'),
+    sugar:g(prefix+'-sugar'),fiber:g(prefix+'-fiber'),starch:g(prefix+'-starch'),polyols:g(prefix+'-polyols'),
+    salt:g(prefix+'-salt'),chol:g(prefix+'-chol'),
+    vitA:g(prefix+'-va'),vitB1:g(prefix+'-vb1'),vitB2:g(prefix+'-vb2'),vitB6:g(prefix+'-vb6'),
+    vitB12:g(prefix+'-vb12'),vitC:g(prefix+'-vc'),vitD:g(prefix+'-vd'),vitE:g(prefix+'-ve'),
+    fe:g(prefix+'-fe'),ca:g(prefix+'-ca'),mg:g(prefix+'-mg'),zn:g(prefix+'-zn'),
+    notes:t(prefix+'-notes'),
+  };
+}
+
+async function enrichProductData(prod){
+  // Проверяем нужно ли обогащение — если хоть одно расширенное поле пустое
+  const needsEnrich=prod.fatSat==null||prod.fiber==null||prod.vitC==null||prod.fe==null;
+  if(!needsEnrich||!S.settings.apikey)return prod;
+  try{
+    const known=Object.entries(prod)
+      .filter(([k,v])=>v!=null&&!['id','name','weight','expiry','opened','afterOpenDays','barcode','icon'].includes(k))
+      .map(([k,v])=>`${k}:${v}`).join(', ');
+    const resp=await claude([{role:'user',content:`Продукт: "${prod.name}".
+Известные данные на 100г: ${known||'только название'}.
+Заполни НЕДОСТАЮЩИЕ поля на основе стандартных нутриентных таблиц. Для известных продуктов используй точные значения, для неизвестных — приблизительные.
+Ответь ТОЛЬКО JSON (только поля со значениями, без null):
+{"fatSat":0,"fatMono":0,"fatPoly":0,"fatTrans":0,"sugar":0,"fiber":0,"starch":0,"polyols":0,"salt":0,"chol":0,"vitA":0,"vitB1":0,"vitB2":0,"vitB6":0,"vitB12":0,"vitC":0,"vitD":0,"vitE":0,"fe":0,"ca":0,"mg":0,"zn":0}`}],
+    'Ты нутрициолог. Только JSON без markdown.',600);
+    if(resp&&typeof resp==='string'){
+      const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
+      // Заполняем только пустые поля
+      Object.entries(data).forEach(([k,v])=>{if(prod[k]==null&&v!=null)prod[k]=v;});
+      prod._enriched=true;
+    }
+  }catch(e){}
+  return prod;
+}
+
+function clearPForm(){
+  ['p-name','p-weight','p-expiry','p-kcal','p-prot','p-fat','p-carb','p-barcode','p-afteropen',
+   'p-fat-sat','p-fat-mono','p-fat-poly','p-fat-trans','p-sugar','p-fiber','p-starch','p-polyols',
+   'p-salt','p-chol','p-va','p-vb1','p-vb2','p-vb6','p-vb12','p-vc','p-vd','p-ve',
+   'p-fe','p-ca','p-mg','p-zn','p-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const cb=document.getElementById('p-opened');if(cb)cb.checked=false;
+  document.getElementById('photoPreview').style.display='none';
+  const exp=document.getElementById('p-expanded');if(exp)exp.style.display='none';
+  const icon=document.getElementById('p-expand-icon');if(icon)icon.textContent='▸';
+  clearPhotoQueue();
+}
 
 /* ── SETTINGS ── */
 const WD_LABELS=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
@@ -2325,11 +2630,12 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
+const APP_VERSION='1.5.7';
 load();
 initSettingsUI();
 document.getElementById('refreshBtn').style.display='flex';
+document.getElementById('appVersion').textContent='v'+APP_VERSION;
 renderMenu();
-// Подтягиваем Yazio при старте если есть настройки
 if(S.settings.apikey&&S.settings.githubUser)setTimeout(loadYazio,1500);
 
 if('serviceWorker'in navigator){window.addEventListener('load',()=>{
