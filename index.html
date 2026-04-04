@@ -625,22 +625,38 @@ select option{background:#1a1a2e;color:var(--text)}
 <div class="scr" id="scr-add-barcode">
   <div class="si">
     <div class="card">
-      <div class="pz" onclick="document.getElementById('barcodeFileInput').click()">
-        <div class="ph">📊</div>
-        <div class="pt">Сфотографировать штрихкод<br><span style="font-size:10px;opacity:0.6">Откроется стандартная камера — она лучше распознаёт штрихкоды</span></div>
-        <input type="file" id="barcodeFileInput" accept="image/*" capture="environment" style="display:none" onchange="processBarcodePhoto(event)">
+      <!-- Кнопка запуска сканера -->
+      <div id="barcodeLaunch">
+        <div class="pz" onclick="startZxingScanner()">
+          <div class="ph">📊</div>
+          <div class="pt">Нажми чтобы сканировать штрихкод<br><span style="font-size:10px;opacity:0.6">Наведи камеру — код определится автоматически</span></div>
+        </div>
       </div>
+      <!-- Видео сканер -->
+      <div id="barcodeScanner" style="display:none">
+        <div style="position:relative;border-radius:12px;overflow:hidden;background:#000;margin-bottom:8px">
+          <video id="zxingVideo" style="width:100%;max-height:260px;display:block" playsinline autoplay muted></video>
+          <!-- Прицел -->
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+            <div style="width:70%;height:35%;border:2px solid rgba(233,69,96,0.8);border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.4)"></div>
+          </div>
+        </div>
+        <div id="zxingStatus" style="text-align:center;font-size:12px;color:var(--text2);margin-bottom:8px">Наведи камеру на штрихкод...</div>
+        <button onclick="stopZxingScanner()" class="bs" style="width:100%">Отменить</button>
+      </div>
+      <!-- Статус поиска в базах -->
       <div id="barcodeStatus" style="display:none;text-align:center;padding:8px;font-size:12px;color:var(--text2)"></div>
-      <!-- Ручной ввод штрихкода -->
+      <!-- Ручной ввод -->
       <div style="display:flex;gap:8px;margin-top:8px">
-        <input type="text" id="manualBarcodeInput" placeholder="Введи штрихкод вручную..." style="flex:1;font-size:13px">
+        <input type="text" id="manualBarcodeInput" placeholder="Введи штрихкод вручную..." style="flex:1;font-size:13px" inputmode="numeric">
         <button onclick="handleBarcode(document.getElementById('manualBarcodeInput').value)" style="background:var(--acc);border:none;color:white;padding:0 14px;border-radius:9px;cursor:pointer;font-size:13px;white-space:nowrap">Найти</button>
       </div>
+      <!-- Результат -->
       <div id="barcodeResult" style="display:none;margin-top:12px">
         <div id="barcodeFound" style="margin-bottom:12px"></div>
         <div class="ig"><label class="il">Вес (г) *</label><input type="number" id="bc-weight" placeholder="500"></div>
         <div class="ig"><label class="il">Срок годности</label><input type="text" id="bc-expiry" placeholder="31.12.2025"></div>
-        <div class="ig"><label class="il">Дней после вскрытия (если указано на упаковке)</label><input type="number" id="bc-afteropen" placeholder="оставь пустым для авто"></div>
+        <div class="ig"><label class="il">Дней после вскрытия</label><input type="number" id="bc-afteropen" placeholder="авто"></div>
         <div class="ig" style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
           <input type="checkbox" id="bc-opened" style="width:18px;height:18px;flex-shrink:0">
           <label for="bc-opened" style="font-size:13px;color:var(--text2);cursor:pointer">Упаковка уже вскрыта</label>
@@ -927,6 +943,7 @@ function showAddMethod(method){
     document.getElementById('textImportStatus').innerHTML='';
     subScreen('add-text','Список текстом','add-product');
   }else if(method==='barcode'){
+    stopZxingScanner();
     document.getElementById('barcodeResult').style.display='none';
     const bs=document.getElementById('barcodeStatus');if(bs)bs.style.display='none';
     const mi=document.getElementById('manualBarcodeInput');if(mi)mi.value='';
@@ -976,6 +993,75 @@ async function processBarcodePhoto(event){
   reader.readAsDataURL(file);
 }
 
+/* ── ZXING СКАНЕР ── */
+let zxingScanner=null;
+let zxingStream=null;
+
+async function startZxingScanner(){
+  // Загружаем ZXing если ещё не загружен
+  if(!window.ZXing){
+    const statusEl=document.getElementById('zxingStatus');
+    if(statusEl)statusEl.textContent='Загружаю библиотеку...';
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+      s.onload=res;s.onerror=rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  document.getElementById('barcodeLaunch').style.display='none';
+  document.getElementById('barcodeScanner').style.display='block';
+  document.getElementById('barcodeResult').style.display='none';
+  const statusEl=document.getElementById('zxingStatus');
+
+  try{
+    const hints=new Map();
+    // Форматы для продуктовых штрихкодов
+    const formats=[
+      ZXing.BarcodeFormat.EAN_13,
+      ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A,
+      ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.QR_CODE,
+    ];
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,formats);
+
+    zxingScanner=new ZXing.BrowserMultiFormatReader(hints);
+    const video=document.getElementById('zxingVideo');
+
+    // Получаем список камер и берём заднюю
+    const devices=await ZXing.BrowserCodeReader.listVideoInputDevices();
+    const backCam=devices.find(d=>d.label.toLowerCase().includes('back')||d.label.toLowerCase().includes('rear'))||devices[devices.length-1];
+    const deviceId=backCam?.deviceId;
+
+    statusEl.textContent='Наведи камеру на штрихкод...';
+
+    await zxingScanner.decodeFromVideoDevice(deviceId,video,async(result,err)=>{
+      if(result){
+        const code=result.getText();
+        stopZxingScanner();
+        await handleBarcode(code);
+      }
+      // err при каждом кадре без кода — это нормально, игнорируем
+    });
+  }catch(e){
+    if(statusEl)statusEl.textContent='Ошибка камеры: '+e.message+'. Введи штрихкод вручную.';
+    document.getElementById('barcodeLaunch').style.display='block';
+    document.getElementById('barcodeScanner').style.display='none';
+  }
+}
+
+function stopZxingScanner(){
+  if(zxingScanner){
+    try{zxingScanner.reset();}catch(e){}
+    zxingScanner=null;
+  }
+  document.getElementById('barcodeScanner').style.display='none';
+  document.getElementById('barcodeLaunch').style.display='block';
+}
+
 async function handleBarcode(code){
   code=(code||'').trim().replace(/\D/g,'');
   if(!code){alert('Введи штрихкод');return;}
@@ -1020,7 +1106,9 @@ async function handleBarcode(code){
       showBarcodeResult(currentBarcodeProduct,'🌐 Open Food Facts',similar);
       if(statusEl)statusEl.style.display='none';
     }else{
-      if(statusEl){statusEl.innerHTML='Штрихкод не найден в базе. Введи данные вручную.';statusEl.style.color='var(--acc2)';}
+      // Не найден в OFF — создаём минимальный продукт со штрихкодом
+      currentBarcodeProduct={barcode:code,name:'',icon:'🥗',kcal:0,prot:0,fat:0,carb:0};
+      if(statusEl){statusEl.innerHTML='Штрихкод не найден в базе. Заполни данные вручную.';statusEl.style.color='var(--acc2)';}
       showBarcodeNotFound(code);
     }
   }catch(e){
@@ -1033,13 +1121,15 @@ async function handleBarcode(code){
 }
 
 function showBarcodeNotFound(code,msg){
-  const el=document.getElementById('barcodeFound');
-  if(el)el.innerHTML=`<div class="na">${msg||'Штрихкод '+code+' не найден в базе.'}</div>`;
-  // Заполняем поля для ручного ввода и переходим на ручную форму
-  document.getElementById('pm-barcode').value=code;
-  const res=document.getElementById('barcodeResult');
-  if(res)res.style.display='none';
+  // Заполняем штрихкод в ручную форму и переходим туда
+  const pmb=document.getElementById('pm-barcode');if(pmb)pmb.value=code||'';
   subScreen('add-manual','Добавить вручную','add-barcode');
+  // Показываем подсказку
+  if(msg){setTimeout(()=>{
+    const na=document.createElement('div');na.className='na';na.style.cssText='margin-bottom:8px;font-size:12px';na.textContent=msg;
+    const card=document.querySelector('#scr-add-manual .card');if(card)card.prepend(na);
+    setTimeout(()=>na.remove(),4000);
+  },100);}
 }
 
 function showBarcodeResult(p,source,similar){
@@ -1367,6 +1457,7 @@ function showGutManual(){
 }
 
 function goBack(){
+  stopZxingScanner();
   document.getElementById('backBtn').style.display='none';
   document.getElementById('mainNav').style.display='flex';
   document.getElementById('hTitle').textContent='Моё питание';
@@ -2643,7 +2734,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.5.9';
+const APP_VERSION='1.6.1';
 load();
 initSettingsUI();
 document.getElementById('refreshBtn').style.display='flex';
