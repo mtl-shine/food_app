@@ -1116,12 +1116,29 @@ function addProductFromBarcode(){
 
 function editBarcodeProduct(){
   if(!currentBarcodeProduct)return;
-  // Заполняем ручную форму данными из штрихкода
-  document.getElementById('pm-name').value=currentBarcodeProduct.name||'';
-  document.getElementById('pm-kcal').value=currentBarcodeProduct.kcal||'';
-  document.getElementById('pm-prot').value=currentBarcodeProduct.prot||'';
-  document.getElementById('pm-fat').value=currentBarcodeProduct.fat||'';
-  document.getElementById('pm-carb').value=currentBarcodeProduct.carb||'';
+  const p=currentBarcodeProduct;
+  document.getElementById('pm-name').value=p.name||'';
+  document.getElementById('pm-barcode').value=p.barcode||'';
+  document.getElementById('pm-kcal').value=p.kcal||'';
+  document.getElementById('pm-prot').value=p.prot||'';
+  document.getElementById('pm-fat').value=p.fat||'';
+  document.getElementById('pm-carb').value=p.carb||'';
+  // Расширенные поля если есть
+  const extFields={
+    'pm-fat-sat':'fatSat','pm-fat-mono':'fatMono','pm-fat-poly':'fatPoly','pm-fat-trans':'fatTrans',
+    'pm-sugar':'sugar','pm-fiber':'fiber','pm-starch':'starch','pm-polyols':'polyols',
+    'pm-salt':'salt','pm-chol':'chol',
+    'pm-va':'vitA','pm-vb1':'vitB1','pm-vb2':'vitB2','pm-vb6':'vitB6','pm-vb12':'vitB12',
+    'pm-vc':'vitC','pm-vd':'vitD','pm-ve':'vitE','pm-fe':'fe','pm-ca':'ca','pm-mg':'mg','pm-zn':'zn'
+  };
+  let hasExt=false;
+  Object.entries(extFields).forEach(([id,key])=>{
+    if(p[key]!=null){const el=document.getElementById(id);if(el){el.value=p[key];hasExt=true;}}
+  });
+  if(hasExt){
+    const exp=document.getElementById('pm-expanded');if(exp)exp.style.display='block';
+    const icon=document.getElementById('pm-expand-icon');if(icon)icon.textContent='▾';
+  }
   subScreen('add-manual','Редактировать','add-barcode');
 }
 
@@ -2349,6 +2366,7 @@ async function processAllPhotos(){
     content.push({type:'text',text:`Изучи все фото и извлеки максимум данных. ТОЛЬКО JSON без markdown:
 {
   "name":"...","weight":null,"expiry":"YYYY-MM-DD или null",
+  "barcode":"цифры штрихкода если виден на фото, иначе null",
   "composition":"полный состав если виден, иначе null",
   "kcal":0,"prot":0,"fat":0,"carb":0,
   "fatSat":null,"fatMono":null,"fatPoly":null,"fatTrans":null,
@@ -2372,6 +2390,7 @@ async function processAllPhotos(){
       document.getElementById('p-name').value=data.name;
       document.getElementById('p-weight').value=data.weight||'';
       document.getElementById('p-expiry').value=data.expiry?new Date(data.expiry).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+      if(data.barcode){const bc=document.getElementById('p-barcode');if(bc)bc.value=data.barcode;}
       document.getElementById('p-kcal').value=data.kcal||'';
       document.getElementById('p-prot').value=data.prot||'';
       document.getElementById('p-fat').value=data.fat||'';
@@ -2624,7 +2643,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.5.8';
+const APP_VERSION='1.5.9';
 load();
 initSettingsUI();
 document.getElementById('refreshBtn').style.display='flex';
