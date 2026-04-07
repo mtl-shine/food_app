@@ -784,9 +784,22 @@ function save(){try{localStorage.setItem('np_v4',JSON.stringify(S));}catch(e){}}
 
 function addToHistory(p){
   if(!S.productHistory)S.productHistory=[];
-  const idx=S.productHistory.findIndex(x=>x.name.toLowerCase()===p.name.toLowerCase());
-  const entry={name:p.name,icon:p.icon||getProductIcon(p.name),kcal:p.kcal,prot:p.prot,fat:p.fat,carb:p.carb,barcode:p.barcode||null};
-  if(idx>=0)S.productHistory[idx]=entry;
+  const idx=S.productHistory.findIndex(x=>x.name.toLowerCase()===p.name.toLowerCase()||(p.barcode&&x.barcode===p.barcode));
+  // Сохраняем полный профиль нутриентов
+  const entry={
+    name:p.name,icon:p.icon||getProductIcon(p.name),barcode:p.barcode||null,
+    kcal:p.kcal,prot:p.prot,fat:p.fat,carb:p.carb,
+    fatSat:p.fatSat,fatMono:p.fatMono,fatPoly:p.fatPoly,fatTrans:p.fatTrans,
+    sugar:p.sugar,fiber:p.fiber,starch:p.starch,polyols:p.polyols,
+    salt:p.salt,chol:p.chol,
+    vitA:p.vitA,vitB1:p.vitB1,vitB2:p.vitB2,vitB6:p.vitB6,vitB12:p.vitB12,
+    vitC:p.vitC,vitD:p.vitD,vitE:p.vitE,
+    fe:p.fe,ca:p.ca,mg:p.mg,zn:p.zn,
+    notes:p.notes,
+  };
+  // Убираем null/undefined чтобы не засорять историю
+  Object.keys(entry).forEach(k=>{if(entry[k]==null)delete entry[k];});
+  if(idx>=0)S.productHistory[idx]={...S.productHistory[idx],...entry};
   else S.productHistory.push(entry);
 }
 
@@ -941,6 +954,7 @@ function showAddMethod(method){
     renderHistory();
     subScreen('add-barcode','Штрихкод / База','add-product');
   }else{
+    editingProductId=null;
     clearManualForm();subScreen('add-manual','Добавить вручную','add-product');
   }
 }
@@ -955,33 +969,31 @@ async function processBarcodePhoto(event){
 
   if(!S.settings.apikey){statusEl.textContent='Укажи API ключ в настройках';return;}
 
-  const reader=new FileReader();
-  reader.onload=async e=>{
-    const b64=e.target.result.split(',')[1];
-    try{
-      const r=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-api-key':S.settings.apikey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:50,messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:file.type,data:b64}},
-          {type:'text',text:'Найди и верни ТОЛЬКО цифры штрихкода (EAN-13, EAN-8, UPC). Только цифры без пробелов, ничего больше. Если штрихкода нет — верни "not_found".'}
-        ]}]})
-      });
-      const d=await r.json();
-      const code=(d.content?.[0]?.text||'').trim().replace(/\D/g,'');
-      if(code&&code.length>=8){
-        statusEl.innerHTML=`✓ Штрихкод: ${code}`;
-        statusEl.style.color='#4ade80';
-        await handleBarcode(code);
-      }else{
-        statusEl.innerHTML='Штрихкод не найден. Введи вручную ниже.';
-        statusEl.style.color='var(--acc2)';
-      }
-    }catch(err){
-      statusEl.textContent='Ошибка. Введи штрихкод вручную.';
+  const {b64,mediaType}=await compressImage(file,1280,0.85);
+  if(!b64){statusEl.textContent='Ошибка обработки фото.';return;}
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':S.settings.apikey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:50,messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:mediaType,data:b64}},
+        {type:'text',text:'Найди и верни ТОЛЬКО цифры штрихкода (EAN-13, EAN-8, UPC). Только цифры без пробелов, ничего больше. Если штрихкода нет — верни "not_found".'}
+      ]}]})
+    });
+    const d=await r.json();
+    const code=(d.content?.[0]?.text||'').trim().replace(/\D/g,'');
+    if(code&&code.length>=8){
+      statusEl.innerHTML=`✓ Штрихкод: ${code}`;
+      statusEl.style.color='#4ade80';
+      await handleBarcode(code);
+    }else{
+      statusEl.innerHTML='Штрихкод не найден. Введи вручную ниже.';
+      statusEl.style.color='var(--acc2)';
     }
-  };
-  reader.readAsDataURL(file);
+  }catch(err){
+    statusEl.textContent='Ошибка. Введи штрихкод вручную.';
+  }
+  event.target.value='';
 }
 
 /* ── ZXING СКАНЕР ── */
@@ -1047,7 +1059,13 @@ async function startZxingScanner(){
 async function startBarcodeDetectorFallback(){
   const statusEl=document.getElementById('zxingStatus');
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+    const stream=await navigator.mediaDevices.getUserMedia({video:{
+      facingMode:'environment',
+      width:{ideal:1920,min:1280},
+      height:{ideal:1080,min:720},
+      focusMode:'continuous',
+      advanced:[{torch:false}]
+    }});
     const video=document.getElementById('zxingVideo');
     video.srcObject=stream;
     await video.play();
@@ -1201,21 +1219,24 @@ function scanBarcodeForManual(){
 function renderHistory(){
   const el=document.getElementById('historyList');if(!el)return;
   const q=(document.getElementById('historySearch')?.value||'').toLowerCase();
-  // История + текущие продукты объединяем
   const all=[...(S.productHistory||[]),...S.products].reduce((acc,p)=>{
     if(!acc.find(x=>x.name.toLowerCase()===p.name.toLowerCase()))acc.push(p);
     return acc;
   },[]);
-  const filtered=q?all.filter(p=>p.name.toLowerCase().includes(q)):all.slice(0,20);
+  const filtered=q?all.filter(p=>p.name.toLowerCase().includes(q)):all.slice(0,30);
   if(!filtered.length){el.innerHTML='<p style="font-size:12px;color:var(--text2)">База пуста — продукты появятся после добавления.</p>';return;}
-  el.innerHTML=filtered.map(p=>`<div class="pi" style="cursor:pointer" onclick="addFromHistory(${JSON.stringify(p).replace(/"/g,'&quot;')})">
+  // Сохраняем в window для доступа по индексу (избегаем потери данных через JSON в onclick)
+  window._historyItems=filtered;
+  el.innerHTML=filtered.map((p,i)=>`<div class="pi" style="cursor:pointer" onclick="addFromHistory(${i})">
     <div class="pico">${p.icon||getProductIcon(p.name)}</div>
     <div class="pinf"><div class="pnm">${esc(p.name)}</div><div class="pmt">${p.kcal||0} ккал · Б${p.prot||0} Ж${p.fat||0} У${p.carb||0}</div></div>
     <span style="font-size:11px;color:var(--acc2)">+ добавить</span>
   </div>`).join('');
 }
 
-function addFromHistory(p){
+function addFromHistory(idx){
+  const p=window._historyItems?.[idx];
+  if(!p)return;
   currentBarcodeProduct=p;
   fillManualFormFromProduct(p);
 }
@@ -1506,8 +1527,11 @@ function renderProducts(){
   const sorted=[...S.products].sort((a,b)=>{if(!a.expiry&&!b.expiry)return 0;if(!a.expiry)return 1;if(!b.expiry)return-1;return new Date(a.expiry)-new Date(b.expiry);});
   el.innerHTML=sorted.map(p=>{const st=expSt(p.expiry);
     return`<div class="pi">
-      <div class="pico">${p.icon||'🥗'}</div>
-      <div class="pinf"><div class="pnm">${esc(p.name)}</div><div class="pmt">${p.weight?p.weight+'г · ':''}${p.kcal?p.kcal+' ккал/100г':''}</div></div>
+      <div class="pico" onclick="editProduct(${p.id})" style="cursor:pointer" title="Редактировать">${p.icon||'🥗'}</div>
+      <div class="pinf" onclick="editProduct(${p.id})" style="cursor:pointer">
+        <div class="pnm">${esc(p.name)}</div>
+        <div class="pmt">${p.weight?p.weight+'г · ':''}${p.kcal?p.kcal+' ккал/100г':''}</div>
+      </div>
       <div style="text-align:right;flex-shrink:0;margin-right:3px">
         <div class="e${st}" style="font-size:11px">${fmtExp(p.expiry)}</div>
         <div style="font-size:9px;color:var(--text2)">${st==='bad'?'просрочен':st==='warn'?'скоро':p.opened?'вскрыт':''}</div>
@@ -1523,6 +1547,82 @@ function renderProducts(){
       <span style="font-size:13px">${esc(item)}</span>
     </div>`).join('');
   }else sc.style.display='none';
+}
+
+let editingProductId=null;
+
+function editProduct(id){
+  const p=S.products.find(x=>x.id===id);if(!p)return;
+  editingProductId=id;
+  // Заполняем форму ручного добавления данными продукта
+  clearManualForm();
+  document.getElementById('pm-name').value=p.name||'';
+  document.getElementById('pm-weight').value=p.weight||'';
+  document.getElementById('pm-expiry').value=p.expiry?new Date(p.expiry).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+  document.getElementById('pm-kcal').value=p.kcal||'';
+  document.getElementById('pm-prot').value=p.prot||'';
+  document.getElementById('pm-fat').value=p.fat||'';
+  document.getElementById('pm-carb').value=p.carb||'';
+  document.getElementById('pm-barcode').value=p.barcode||'';
+  document.getElementById('pm-afteropen').value=p.afterOpenDays||'';
+  if(p.opened){const cb=document.getElementById('pm-opened');if(cb)cb.checked=true;}
+  // Расширенные поля
+  const extFields={
+    'pm-fat-sat':'fatSat','pm-fat-mono':'fatMono','pm-fat-poly':'fatPoly','pm-fat-trans':'fatTrans',
+    'pm-sugar':'sugar','pm-fiber':'fiber','pm-starch':'starch','pm-polyols':'polyols',
+    'pm-salt':'salt','pm-chol':'chol',
+    'pm-va':'vitA','pm-vb1':'vitB1','pm-vb2':'vitB2','pm-vb6':'vitB6','pm-vb12':'vitB12',
+    'pm-vc':'vitC','pm-vd':'vitD','pm-ve':'vitE','pm-fe':'fe','pm-ca':'ca','pm-mg':'mg','pm-zn':'zn'
+  };
+  let hasExt=false;
+  Object.entries(extFields).forEach(([elId,key])=>{
+    if(p[key]!=null){const el=document.getElementById(elId);if(el){el.value=p[key];hasExt=true;}}
+  });
+  if(hasExt){
+    const exp=document.getElementById('pm-expanded');if(exp)exp.style.display='block';
+    const icon=document.getElementById('pm-expand-icon');if(icon)icon.textContent='▾';
+  }
+  if(p.notes){const n=document.getElementById('pm-notes');if(n)n.value=p.notes;}
+  subScreen('add-manual','Редактировать продукт','products');
+  // Меняем кнопку на "Сохранить изменения"
+  setTimeout(()=>{
+    const btn=document.querySelector('#scr-add-manual .bp');
+    if(btn){btn.textContent='Сохранить изменения';btn.onclick=saveEditedProduct;}
+  },50);
+}
+
+async function saveEditedProduct(){
+  const name=document.getElementById('pm-name').value.trim();
+  if(!name){alert('Укажи название');return;}
+  const idx=S.products.findIndex(x=>x.id===editingProductId);
+  if(idx===-1)return;
+  const opened=document.getElementById('pm-opened').checked;
+  const afterOpenDays=parseFloat(document.getElementById('pm-afteropen').value)||0;
+  let expiry=parseExp(document.getElementById('pm-expiry').value);
+  if(!expiry)expiry=autoExpiry(name,opened);
+  const nutrition=readNutrition('pm');
+  const prod={...S.products[idx],name,
+    weight:parseFloat(document.getElementById('pm-weight').value)||S.products[idx].weight||0,
+    expiry,opened,afterOpenDays:afterOpenDays||null,
+    barcode:document.getElementById('pm-barcode')?.value.trim()||S.products[idx].barcode||null,
+    icon:S.products[idx].icon||getProductIcon(name),
+    ...nutrition};
+  // Обогащаем если нужно
+  const btn=document.querySelector('#scr-add-manual .bp');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Сохраняю...';}
+  const enriched=await enrichProductData({...prod});
+  S.products[idx]={...prod,...enriched};
+  addToHistory(S.products[idx]);
+  save();
+  editingProductId=null;
+  // Восстанавливаем кнопку
+  if(btn){btn.disabled=false;btn.textContent='Добавить в холодильник';btn.onclick=addProductManual;}
+  clearManualForm();
+  subScreen('add-product','Добавить продукт','products');
+  // Возвращаемся сразу в холодильник
+  setTimeout(()=>{
+    switchNav('products',document.getElementById('nav-products'));
+  },100);
 }
 function delProduct(id,e){e.stopPropagation();if(!confirm('Удалить?'))return;S.products=S.products.filter(p=>p.id!==id);save();renderProducts();}
 function toggleShop(i,el){if(!S.shoppingChecked)S.shoppingChecked={};S.shoppingChecked[i]=!S.shoppingChecked[i];el.textContent=S.shoppingChecked[i]?'✓':'○';save();}
@@ -2365,20 +2465,46 @@ ${ingredients?'Ингредиенты из базы: '+ingredients:'Продук
 /* ── ФОТО ПРОДУКТА ── */
 let photoQueue=[];
 
-function addPhotoToQueue(event){
-  const files=Array.from(event.target.files);
-  files.forEach(file=>{
+// Сжимаем фото до нужного размера через Canvas
+async function compressImage(file, maxWidth=1024, quality=0.80){
+  return new Promise(resolve=>{
     const reader=new FileReader();
     reader.onload=e=>{
-      const b64=e.target.result.split(',')[1];
-      const id=Date.now()+Math.random();
-      photoQueue.push({id,file,b64,mediaType:file.type});
-      renderPhotoQueue();
+      const img=new Image();
+      img.onload=()=>{
+        try{
+          let w=img.width, h=img.height;
+          if(w>maxWidth){h=Math.round(h*maxWidth/w);w=maxWidth;}
+          // Дополнительное сжатие если файл больше 3МБ
+          if(file.size>3*1024*1024&&w>800){h=Math.round(h*800/w);w=800;quality=0.75;}
+          const canvas=document.createElement('canvas');
+          canvas.width=w;canvas.height=h;
+          canvas.getContext('2d').drawImage(img,0,0,w,h);
+          const b64=canvas.toDataURL('image/jpeg',quality).split(',')[1];
+          canvas.width=1;canvas.height=1; // освобождаем память
+          resolve({b64,mediaType:'image/jpeg'});
+        }catch(err){
+          // Fallback без canvas — читаем напрямую
+          resolve({b64:e.target.result.split(',')[1],mediaType:file.type});
+        }
+      };
+      img.onerror=()=>resolve({b64:e.target.result.split(',')[1],mediaType:file.type});
+      img.src=e.target.result;
     };
+    reader.onerror=()=>resolve(null);
     reader.readAsDataURL(file);
   });
+}
+
+function addPhotoToQueue(event){
+  const files=Array.from(event.target.files);
+  files.forEach(async file=>{
+    const {b64,mediaType}=await compressImage(file);
+    const id=Date.now()+Math.random();
+    photoQueue.push({id,file,b64,mediaType});
+    renderPhotoQueue();
+  });
   event.target.value='';
-  // Скрываем начальную зону и показываем очередь
   document.getElementById('photoZones').style.display='none';
   document.getElementById('photoQueue').style.display='block';
 }
@@ -2695,7 +2821,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.6.3';
+const APP_VERSION='1.6.4';
 load();
 initSettingsUI();
 document.getElementById('refreshBtn').style.display='flex';
