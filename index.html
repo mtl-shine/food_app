@@ -2225,10 +2225,22 @@ async function deductFromFridge(yazioData, updatedDates){
 
   const today=new Date().toISOString().split('T')[0];
   const yesterday=new Date(Date.now()-864e5).toISOString().split('T')[0];
-  const relevantDays=(yazioData.diary||[]).filter(d=>
+  const diary=yazioData.diary||[];
+
+  // Диагностика — показываем что нашли
+  const el=document.getElementById('yazioInfo');
+  const todayDay=diary.find(d=>d.date===today);
+  const yesterdayDay=diary.find(d=>d.date===yesterday);
+  const debugInfo=`сегодня (${today}): ${todayDay?(todayDay.dishes||[]).length+' блюд':'нет данных'}, вчера (${yesterday}): ${yesterdayDay?(yesterdayDay.dishes||[]).length+' блюд':'нет данных'}`;
+
+  const relevantDays=diary.filter(d=>
     updatedDates.includes(d.date)&&(d.date===today||d.date===yesterday)&&(d.dishes||[]).length>0
   );
-  if(!relevantDays.length)return;
+
+  if(!relevantDays.length){
+    if(el){const cur=el.innerHTML;el.innerHTML=cur+`<div style="font-size:11px;color:var(--text2);margin-top:4px">ℹ Вычитание: ${debugInfo}</div>`;}
+    return;
+  }
 
   if(!S.yazioMapping)S.yazioMapping={};// {yazioDishName: fridgeProductName|null}
 
@@ -3044,7 +3056,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.6.7';
+const APP_VERSION='1.6.8';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
