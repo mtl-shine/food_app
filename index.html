@@ -1492,6 +1492,9 @@ function parseExp(s){
   // YYYY.MM или YYYY/MM
   m=s.match(/^(\d{4})[.\/-](\d{1,2})$/);
   if(m){const d=new Date(parseInt(m[1]),parseInt(m[2]),0);return d.toISOString().split('T')[0];}
+  // MM.YY или MM/YY — двузначный год
+  m=s.match(/^(\d{1,2})[.\/-](\d{2})$/);
+  if(m){const year=2000+parseInt(m[2]);const d=new Date(year,parseInt(m[1]),0);return d.toISOString().split('T')[0];}
   // Просто год — берём конец года
   m=s.match(/^(\d{4})$/);
   if(m)return`${m[1]}-12-31`;
@@ -3056,7 +3059,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.6.8';
+const APP_VERSION='1.6.9';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
