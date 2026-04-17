@@ -1374,7 +1374,7 @@ async function addProductForm(){
   if(btn){btn.disabled=false;btn.innerHTML='Добавить в холодильник';}
   S.products.push(prod);
   addToHistory(prod);
-  save();clearPForm();
+  S._formDraft=null;save();clearPForm();
   subScreen('add-product','Добавить продукт','products');
 }
 
@@ -1406,7 +1406,7 @@ async function addProductManual(){
   if(btn){btn.disabled=false;btn.innerHTML='Добавить в холодильник';}
   S.products.push(prod);
   addToHistory(prod);
-  save();clearManualForm();
+  S._formDraft=null;save();clearManualForm();
   subScreen('add-product','Добавить продукт','products');
 }
 
@@ -2250,41 +2250,44 @@ async function loadYazio(){
     const daysCount=fullDiary.length;
     if(el)el.innerHTML=`<div class="yz-ok">✓ Синхронизировано ${new Date(data.synced_at).toLocaleDateString('ru-RU')} · обновлено ${updatedDates.length} дн. · история ${daysCount} дн. · ср. ${S.yazioData.summary?.avg_kcal||0} ккал/день</div>`;
 
-    // Вычитаем из холодильника если он не пуст
-    if(S.products.length>0){
-      await deductFromFridge(data, updatedDates);
-    }
-
     // Корректировка меню сегодня
     await correctTodayByYazio(data);
     if(S.yazioProfile)document.getElementById('btnShowProfile').style.display='block';
   }catch(e){
     if(el)el.innerHTML=`<div class="nr">Не удалось загрузить. Проверь что yazio_sync.py запускался и данные верны.<br><small style="opacity:0.7">${url}</small></div>`;
+    return;
+  }
+  // Вычитаем из холодильника ПОСЛЕ try/catch — чтобы ошибки были видны
+  if(S.products.length>0){
+    await deductFromFridge(S.yazioData, updatedDates);
   }
 }
 
 /* ── ВЫЧИТАНИЕ ИЗ ХОЛОДИЛЬНИКА ПО ФАКТУ YAZIO ── */
 async function deductFromFridge(yazioData, updatedDates){
-  if(!S.settings.apikey||!S.products.length)return;
+  const el=document.getElementById('yazioInfo');
+  const addInfo=msg=>{if(el)el.innerHTML+=`<div style="font-size:11px;color:var(--text2);margin-top:3px">🔍 ${msg}</div>`;};
+
+  if(!S.settings.apikey){addInfo('нет API ключа');return;}
+  if(!S.products.length){addInfo('холодильник пуст');return;}
 
   const today=new Date().toISOString().split('T')[0];
   const yesterday=new Date(Date.now()-864e5).toISOString().split('T')[0];
   const diary=yazioData.diary||[];
 
-  // Диагностика — показываем что нашли
-  const el=document.getElementById('yazioInfo');
   const todayDay=diary.find(d=>d.date===today);
   const yesterdayDay=diary.find(d=>d.date===yesterday);
-  const debugInfo=`сегодня (${today}): ${todayDay?(todayDay.dishes||[]).length+' блюд':'нет данных'}, вчера (${yesterday}): ${yesterdayDay?(yesterdayDay.dishes||[]).length+' блюд':'нет данных'}`;
+  addInfo(`сегодня (${today}): ${todayDay?`${(todayDay.dishes||[]).length} блюд`:'нет в файле'} | вчера (${yesterday}): ${yesterdayDay?`${(yesterdayDay.dishes||[]).length} блюд`:'нет в файле'} | updatedDates: [${updatedDates.join(',')}]`);
 
   const relevantDays=diary.filter(d=>
     updatedDates.includes(d.date)&&(d.date===today||d.date===yesterday)&&(d.dishes||[]).length>0
   );
 
   if(!relevantDays.length){
-    if(el){const cur=el.innerHTML;el.innerHTML=cur+`<div style="font-size:11px;color:var(--text2);margin-top:4px">ℹ Вычитание: ${debugInfo}</div>`;}
+    addInfo('нет подходящих дней — вычитание пропущено');
     return;
   }
+  addInfo(`найдено ${relevantDays.length} дн. → начинаю сопоставление`);
 
   if(!S.yazioMapping)S.yazioMapping={};// {yazioDishName: fridgeProductName|null}
 
@@ -2737,15 +2740,28 @@ async function compressImage(file, maxWidth=1024, quality=0.80){
 
 function addPhotoToQueue(event){
   const files=Array.from(event.target.files);
-  files.forEach(async file=>{
-    const {b64,mediaType}=await compressImage(file);
-    const id=Date.now()+Math.random();
-    photoQueue.push({id,file,b64,mediaType});
-    renderPhotoQueue();
-  });
+  if(!files.length)return;
   event.target.value='';
+  // Показываем очередь сразу
   document.getElementById('photoZones').style.display='none';
   document.getElementById('photoQueue').style.display='block';
+  const statusEl=document.getElementById('recStatus');
+  if(statusEl){statusEl.style.display='block';statusEl.innerHTML='<span class="spin"></span> Обрабатываю фото...';}
+  // Обрабатываем каждый файл
+  let processed=0;
+  files.forEach(async file=>{
+    try{
+      const result=await compressImage(file);
+      if(!result)return;
+      const {b64,mediaType}=result;
+      photoQueue.push({id:Date.now()+Math.random(),file,b64,mediaType});
+      renderPhotoQueue();
+    }catch(e){}
+    processed++;
+    if(processed===files.length&&statusEl){
+      statusEl.innerHTML='';statusEl.style.display='none';
+    }
+  });
 }
 
 function renderPhotoQueue(){
@@ -3100,7 +3116,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.7.0';
+const APP_VERSION='1.7.3';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
@@ -3109,40 +3125,57 @@ document.getElementById('appVersion').textContent='v'+APP_VERSION;
 (function restoreScreen(){
   const sc=S.currentScreen;
   const mainTabs=['menu','products','dishes','gut','chat','tips','settings'];
+  // Для экранов добавления/редактирования — восстанавливаем только если есть черновик
+  const editScreens=['add-manual','add-photo','add-text','add-barcode','add-product'];
+  const hasDraft=S._formDraft&&(S._formDraft.name||S._formDraft.kcal||S._formDraft.weight);
+
+  let restoreName=null;
   if(!sc||sc.isMain||mainTabs.includes(sc.name)){
-    // Основная вкладка
-    const name=(sc&&sc.isMain)?sc.name:'menu';
+    restoreName=(sc&&sc.isMain)?sc.name:'menu';
+  }else if(editScreens.includes(sc.name)){
+    // Экран добавления/редактирования — восстанавливаем только с черновиком
+    if(hasDraft){
+      restoreName=sc.name;// восстановим как подэкран
+    }else{
+      restoreName=sc.prev||'products';// нет данных — возвращаем в продукты
+    }
+  }else{
+    restoreName=sc.name;// другие подэкраны (профиль yazio, настройки) — восстанавливаем
+  }
+
+  const isMain=mainTabs.includes(restoreName)||!sc||sc.isMain||(editScreens.includes(sc.name)&&!hasDraft);
+
+  if(isMain){
     document.getElementById('refreshBtn').style.display='flex';
-    const nb=document.getElementById('nav-'+name);
+    const nb=document.getElementById('nav-'+restoreName);
     if(nb){document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));nb.classList.add('active');}
-    show(name);
-    if(name==='products')renderProducts();
-    else if(name==='dishes')renderDishes();
-    else if(name==='gut')renderGut();
+    show(restoreName);
+    if(restoreName==='products')renderProducts();
+    else if(restoreName==='dishes')renderDishes();
+    else if(restoreName==='gut')renderGut();
+    else if(restoreName==='chat')renderChatHistory();
     else renderMenu();
   }else{
-    // Подэкран — восстанавливаем
+    // Подэкран
     document.getElementById('backBtn').style.display='block';
     document.getElementById('mainNav').style.display='none';
     document.getElementById('refreshBtn').style.display='none';
     document.getElementById('hTitle').textContent=sc.title||'';
     S.prevScreen=sc.prev||'menu';
-    show(sc.name);
-    // Восстанавливаем данные формы если были
-    if(S._formDraft){
+    show(restoreName);
+    // Восстанавливаем данные формы
+    if(hasDraft&&(restoreName==='add-manual'||restoreName==='add-photo')){
       const d=S._formDraft;
+      const pfx=restoreName==='add-manual'?'pm':'p';
       const setVal=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
-      if(sc.name==='add-manual'||sc.name==='add-photo'){
-        const pfx=sc.name==='add-manual'?'pm':'p';
-        setVal(pfx+'-name',d.name);setVal(pfx+'-weight',d.weight);
-        setVal(pfx+'-expiry',d.expiry);setVal(pfx+'-kcal',d.kcal);
-        setVal(pfx+'-prot',d.prot);setVal(pfx+'-fat',d.fat);setVal(pfx+'-carb',d.carb);
-        setVal(pfx+'-barcode',d.barcode);setVal(pfx+'-notes',d.notes);
-        setVal(pfx+'-fat-sat',d.fatSat);setVal(pfx+'-sugar',d.sugar);
-        setVal(pfx+'-fiber',d.fiber);setVal(pfx+'-salt',d.salt);
-      }
+      setVal(pfx+'-name',d.name);setVal(pfx+'-weight',d.weight);
+      setVal(pfx+'-expiry',d.expiry);setVal(pfx+'-kcal',d.kcal);
+      setVal(pfx+'-prot',d.prot);setVal(pfx+'-fat',d.fat);setVal(pfx+'-carb',d.carb);
+      setVal(pfx+'-barcode',d.barcode);setVal(pfx+'-notes',d.notes);
+      setVal(pfx+'-fat-sat',d.fatSat);setVal(pfx+'-sugar',d.sugar);
+      setVal(pfx+'-fiber',d.fiber);setVal(pfx+'-salt',d.salt);
     }
-    renderMenu();// на случай если prevScreen=menu
+    renderMenu();
   }
 })();
 
