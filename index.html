@@ -891,53 +891,94 @@ function showAddProduct(){subScreen('add-product','Добавить продук
 /* ── ИКОНКИ ── */
 function getProductIcon(name){
   const n=name.toLowerCase();
-  if(n.match(/курин|индейк|говядин|свинин|баранин|телятин|фарш|мясо|колбас|сосиск|ветчин/))return'🥩';
-  if(n.match(/рыб|сёмг|форел|треск|минтай|тунец|лосос|карп|судак|скумбри/))return'🐟';
-  if(n.match(/креветк|кальмар|осьминог|мидий|морепродукт/))return'🦐';
-  if(n.match(/молок|кефир|ряженк|простоквашк|сливк/))return'🥛';
-  if(n.match(/творог|йогурт|сметан/))return'🧴';
-  if(n.match(/сыр/))return'🧀';
-  if(n.match(/яйц/))return'🥚';
-  if(n.match(/масло сливочн|масло топлён/))return'🧈';
-  if(n.match(/гречк|овсянк|рис|перловк|булгур|киноа|пшено|кукурузн|манн/))return'🌾';
-  if(n.match(/макарон|паст|спагетт|лапш|вермишел/))return'🍝';
-  if(n.match(/хлеб|батон|булк|багет|лаваш|питт/))return'🍞';
-  if(n.match(/помидор|томат/))return'🍅';
-  if(n.match(/огурец/))return'🥒';
-  if(n.match(/перец|болгарск/))return'🫑';
-  if(n.match(/морковь|морковк/))return'🥕';
-  if(n.match(/картофел|картошк/))return'🥔';
-  if(n.match(/капуст|броккол|цветн|пекинск/))return'🥦';
-  if(n.match(/лук|чеснок/))return'🧅';
-  if(n.match(/баклажан/))return'🍆';
-  if(n.match(/кабачок|цукини/))return'🥬';
-  if(n.match(/свёкл|свекл/))return'🫚';
-  if(n.match(/шпинат|руккол|салат|мангольд|листов/))return'🥬';
-  if(n.match(/укроп|петрушк|кинза|базилик|мята|зелен/))return'🌿';
-  if(n.match(/гриб/))return'🍄';
-  if(n.match(/яблок/))return'🍎';
-  if(n.match(/груш/))return'🍐';
-  if(n.match(/банан/))return'🍌';
-  if(n.match(/апельсин|мандарин/))return'🍊';
-  if(n.match(/лимон|лайм/))return'🍋';
-  if(n.match(/персик|абрикос|нектарин/))return'🍑';
-  if(n.match(/слив/))return'🫐';
-  if(n.match(/виноград/))return'🍇';
-  if(n.match(/арбуз/))return'🍉';
-  if(n.match(/клубник/))return'🍓';
-  if(n.match(/черник|малин|смород|вишн|черешн|ягод/))return'🫐';
-  if(n.match(/орех|миндал|кешью|фундук|арахис|фисташк/))return'🥜';
-  if(n.match(/семен|льн|чиа|кунжут|подсолнечн/))return'🌻';
-  if(n.match(/масл/))return'🫙';
-  if(n.match(/мёд|мед/))return'🍯';
-  if(n.match(/шоколад|конфет|печень|торт|пирог|десерт|сладост/))return'🍫';
-  if(n.match(/сахар|сахарозамен|стевия|эритрит/))return'🍬';
-  if(n.match(/соус|кетчуп|майонез|горчиц|аджик/))return'🥫';
-  if(n.match(/фасол|чечевиц|горох|нут|бобов/))return'🫘';
-  if(n.match(/тофу|соев/))return'🫘';
-  if(n.match(/кофе|чай/))return'☕';
-  if(n.match(/сок|компот|морс/))return'🧃';
-  if(n.match(/вод/))return'💧';
+  // ── Мясо / Fleisch / Meat ──
+  if(n.match(/курин|hähnchen|chicken|hühnchen|индейк|pute|turkey|говядин|rind|beef|свинин|schwein|pork|баранин|lamm|lamb|телятин|kalb|veal|фарш|hack|mince|мясо|fleisch|meat|колбас|wurst|sausage|сосиск|ветчин|schinken|ham/))return'🥩';
+  // ── Рыба / Fisch / Fish ──
+  if(n.match(/рыб|fisch|fish|сёмг|lachs|salmon|форел|forelle|trout|треск|kabeljau|cod|минтай|тунец|thun|tuna|лосос|карп|karpfen|судак|скумбри|makrele|макрель|hering|сельд|herring/))return'🐟';
+  // ── Морепродукты ──
+  if(n.match(/креветк|shrimp|garnele|кальмар|tintenfisch|squid|осьминог|мидий|muschel|морепродукт|seafood/))return'🦐';
+  // ── Молоко / Milch ──
+  if(n.match(/молок|milch|milk|кефир|ряженк|простоквашк|сливк|sahne|cream/))return'🥛';
+  // ── Творог / Quark / Йогурт ──
+  if(n.match(/творог|quark|йогурт|joghurt|yogurt|сметан|schmand|crème/))return'🧴';
+  // ── Сыр / Käse ──
+  if(n.match(/сыр|käse|cheese|mozzarella|parmesan|gouda|edamer|brie|camembert|рокфор|roquefort/))return'🧀';
+  // ── Яйца / Eier ──
+  if(n.match(/яйц|eier|egg/))return'🥚';
+  // ── Масло сливочное ──
+  if(n.match(/масло сливочн|масло топлён|butter/))return'🧈';
+  // ── Крупы / Getreide ──
+  if(n.match(/гречк|buchweizen|овсянк|hafer|oat|рис|reis|rice|перловк|булгур|kinoа|киноа|quinoa|пшено|hirse|кукурузн|mais|corn|манн|grieß|полба|dinkel|spelt|амарант|amaranth/))return'🌾';
+  // ── Макароны / Nudeln ──
+  if(n.match(/макарон|nudeln|pasta|паст|спагетт|spaghetti|лапш|вермишел/))return'🍝';
+  // ── Хлеб / Brot ──
+  if(n.match(/хлеб|brot|bread|батон|булк|brötchen|roll|багет|baguette|лаваш|питт|knäckebrot/))return'🍞';
+  // ── Овощи ──
+  if(n.match(/помидор|томат|tomate|tomato/))return'🍅';
+  if(n.match(/огурец|gurke|cucumber/))return'🥒';
+  if(n.match(/перец|paprika|pepper|болгарск/))return'🫑';
+  if(n.match(/морковь|морковк|karotte|möhre|carrot/))return'🥕';
+  if(n.match(/картофел|картошк|kartoffel|potato/))return'🥔';
+  if(n.match(/капуст|броккол|broccoli|blumenkohl|цветн|пекинск|kohl|cabbage/))return'🥦';
+  if(n.match(/лук|zwiebel|onion|чеснок|knoblauch|garlic/))return'🧅';
+  if(n.match(/баклажан|aubergine|eggplant/))return'🍆';
+  if(n.match(/кабачок|цукини|zucchini|courgette/))return'🥬';
+  if(n.match(/свёкл|свекл|rote bete|beet/))return'🫚';
+  if(n.match(/шпинат|spinat|spinach|руккол|rucola|салат|salat|lettuce|мангольд|mangold|листов/))return'🥬';
+  if(n.match(/укроп|dill|петрушк|petersilie|parsley|кинза|кориандр|coriander|базилик|basilikum|basil|мята|minze|mint|зелен|kräuter|herb/))return'🌿';
+  if(n.match(/гриб|pilz|mushroom|шампиньон|champignon|белый гриб|steinpilz/))return'🍄';
+  if(n.match(/горох|erbsen|peas|зелёный горошек|grüne erbsen/))return'🟢';
+  if(n.match(/фенхель|fenchel|fennel/))return'🌿';
+  if(n.match(/спаржа|spargel|asparagus/))return'🥦';
+  if(n.match(/кукуруза|mais|corn/))return'🌽';
+  if(n.match(/тыква|kürbis|pumpkin/))return'🎃';
+  if(n.match(/авокадо|avocado/))return'🥑';
+  if(n.match(/артишок|artischocke|artichoke/))return'🥬';
+  // ── Фрукты / Obst ──
+  if(n.match(/яблок|apfel|apple/))return'🍎';
+  if(n.match(/груш|birne|pear/))return'🍐';
+  if(n.match(/банан|banane|banana/))return'🍌';
+  if(n.match(/апельсин|orange|мандарин|mandarine/))return'🍊';
+  if(n.match(/лимон|zitrone|lemon|лайм|limette|lime/))return'🍋';
+  if(n.match(/персик|pfirsich|peach|абрикос|aprikose|apricot|нектарин|nektarine/))return'🍑';
+  if(n.match(/слив|pflaume|plum/))return'🫐';
+  if(n.match(/виноград|traube|grape/))return'🍇';
+  if(n.match(/арбуз|wassermelone|watermelon/))return'🍉';
+  if(n.match(/клубник|erdbeere|strawberry/))return'🍓';
+  if(n.match(/черник|heidelbeere|blueberry|малин|himbeere|raspberry|смород|johannisbeere|вишн|kirsche|cherry|черешн|ягод|beere|berry/))return'🫐';
+  if(n.match(/манго|mango|ананас|ananas|pineapple|папайя|papaya/))return'🥭';
+  if(n.match(/кокос|kokosnuss|coconut/))return'🥥';
+  // ── Орехи / Nüsse ──
+  if(n.match(/орех|nuss|nut|миндал|mandel|almond|кешью|cashew|фундук|haselnuss|hazelnut|арахис|erdnuss|peanut|фисташк|pistazie|pistachio|пекан|pecan|грецк|walnuss|walnut/))return'🥜';
+  // ── Семена ──
+  if(n.match(/семен|samen|seed|льн|leinsamen|flax|чиа|chia|кунжут|sesam|sesame/))return'🌱';
+  if(n.match(/подсолнечн|sonnenblumen|sunflower/))return'🌻';
+  // ── Бобовые ──
+  if(n.match(/фасол|bohnen|bean|чечевиц|linsen|lentil|горох|erbsen|нут|kichererbse|chickpea|бобов|hülsenfrucht/))return'🫘';
+  // ── Масла / Öle ──
+  if(n.match(/оливков.*масл|olivenöl|olive oil/))return'🫒';
+  if(n.match(/масл|öl|oil/))return'🫙';
+  // ── Тофу / Соя ──
+  if(n.match(/тофу|tofu|соев|soja|soy/))return'🫘';
+  // ── Напитки ──
+  if(n.match(/кофе|kaffee|coffee/))return'☕';
+  if(n.match(/чай|tee|tea/))return'🫖';
+  if(n.match(/сок|saft|juice|компот|морс/))return'🧃';
+  if(n.match(/вод|wasser|water/))return'💧';
+  if(n.match(/молок.*овсян|haferdrink|hafermilch|oat milk|овсян.*напит/))return'🥛';
+  // ── Сладкое / Süßes ──
+  if(n.match(/мёд|мед|honig|honey/))return'🍯';
+  if(n.match(/шоколад|schokolade|chocolate|конфет|süßigkeit|candy|печень|keks|cookie|торт|kuchen|cake|пирог|десерт|dessert|сладост/))return'🍫';
+  if(n.match(/сахар|zucker|sugar|сахарозамен|стевия|stevia|эритрит|erythrit/))return'🍬';
+  if(n.match(/варень|marmelade|jam|джем/))return'🍯';
+  // ── Соусы / Консервы ──
+  if(n.match(/соус|sauce|кетчуп|ketchup|майонез|mayonnaise|горчиц|senf|mustard|аджик/))return'🥫';
+  if(n.match(/консерв|dose|canned/))return'🥫';
+  // ── Яйца / Eier ──
+  if(n.match(/яйц|ei\b|eier|egg/))return'🥚';
+  // ── Специи ──
+  if(n.match(/специ|gewürz|spice|перец молот|корица|zimt|cinnamon|куркум|kurkuma|turmeric|имбир|ingwer|ginger/))return'🧂';
+  if(n.match(/соль|salz|salt/))return'🧂';
   return'🥗';
 }
 
@@ -3059,7 +3100,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.6.9';
+const APP_VERSION='1.7.0';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
