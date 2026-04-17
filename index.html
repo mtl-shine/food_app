@@ -331,6 +331,7 @@ select option{background:#1a1a2e;color:var(--text)}
     <button class="bp" onclick="saveSettings()">Сохранить</button>
     <button class="bs" onclick="generateWeekMenu()">↺ Пересоставить меню</button>
     <button class="bs" onclick="refreshAllIcons()">🎨 Обновить иконки продуктов</button>
+    <button class="bs" onclick="syncFridgeToHistory()">🔄 Синхронизировать базу с холодильником</button>
     <button class="bs" onclick="clearMenu()" style="color:var(--acc);border-color:rgba(233,69,96,0.3)">Сбросить меню</button>
   </div>
 </div>
@@ -2027,23 +2028,40 @@ async function sendChat(){
   msgs.appendChild(loading);msgs.scrollTop=msgs.scrollHeight;
   if(!S.settings.apikey){loading.textContent='Укажи API ключ в настройках.';loading.classList.remove('loading');return;}
   S.chatHistory.push({role:'user',content:text});
-  const prods=S.products.map(p=>`${p.name} (до ${p.expiry||'?'})`).join(', ');
+  const prods=S.products.map(p=>{
+    const parts=[`${p.name}`];
+    if(p.weight)parts.push(`${p.weight}г`);
+    if(p.expiry)parts.push(`до ${p.expiry}`);
+    if(p.kcal)parts.push(`${p.kcal}ккал`);
+    if(p.prot||p.fat||p.carb)parts.push(`Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}`);
+    if(p.fatSat)parts.push(`нас.ж${p.fatSat}`);
+    if(p.fiber)parts.push(`клетч${p.fiber}`);
+    if(p.salt)parts.push(`соль${p.salt}`);
+    if(p.notes)parts.push(`(${p.notes})`);
+    return parts.join(' | ');
+  }).join('\n');
   const liked=S.dishes.filter(d=>d.liked).map(d=>d.name).join(', ')||'нет';
   const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-5).map(g=>g.note).filter(Boolean).join(', ')||'нет';
   const resp=await claude(S.chatHistory,
     `Ты персональный ассистент по питанию и кулинарии. Говори по-русски, дружелюбно.
 Контекст пользователя:
-- Продукты в холодильнике: ${prods||'нет данных'}
+ХОЛОДИЛЬНИК (полные данные):
+${prods||'пусто'}
+
 - Цели: ${S.settings.kcal}ккал/день, Б${S.settings.prot}/Ж${S.settings.fat}/У${S.settings.carb}г
 - Любимые блюда: ${liked}
 - Проблемы с ЖКТ: ${gutBad}
 - Тренировки: ${(S.settings.workoutDays||[]).map(i=>['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i]).join(', ')||'нет'}
 
-Ты можешь помочь с чем угодно: подробный рецепт, замена ингредиента, вопросы про нутриенты, что приготовить из остатков, советы по готовке, пожелания к дням меню. Также можешь обсуждать психологическую сторону отношений с едой. Отвечай вдумчиво и без осуждения.
+Ты можешь помочь с чем угодно: рецепт, замена ингредиента, нутриенты, что приготовить, советы, пожелания к дням меню, психологическая сторона питания. Отвечай вдумчиво и без осуждения.
 
-ВАЖНО: Если пользователь просит добавить продукты в холодильник — в конце ответа добавь блок:
+ВАЖНО про добавление продуктов в холодильник:
+- Если просят добавить продукт N раз — добавь N записей с одинаковыми данными
+- Если просят скопировать продукт из холодильника — возьми ВСЕ его данные из списка выше и используй их
+- Если данные продукта известны из холодильника — используй их полностью (kcal, prot, fat, carb, fatSat, fiber, salt и т.д.)
+- В конце ответа добавь блок с продуктами для добавления:
 <ADD_PRODUCTS>
-[{"name":"Название","weight":число,"kcal":число,"prot":число,"fat":число,"carb":число}]
+[{"name":"Название","weight":число,"kcal":число,"prot":число,"fat":число,"carb":число,"fatSat":число_или_null,"fiber":число_или_null,"salt":число_или_null,"notes":"текст_или_null"}]
 </ADD_PRODUCTS>
 Если добавлять ничего не нужно — не добавляй этот блок.`,1200);
   if(resp&&typeof resp==='string'){
@@ -2061,10 +2079,15 @@ async function sendChat(){
             name:p.name,
             icon:getProductIcon(p.name),
             weight:p.weight||0,
-            expiry:autoExpiry(p.name,false),
+            expiry:p.expiry||autoExpiry(p.name,false),
             opened:false,
             kcal:p.kcal||0,prot:p.prot||0,fat:p.fat||0,carb:p.carb||0,
+            fatSat:p.fatSat||null,fatMono:p.fatMono||null,fatPoly:p.fatPoly||null,
+            sugar:p.sugar||null,fiber:p.fiber||null,salt:p.salt||null,
+            notes:p.notes||null,
           };
+          // Убираем null поля
+          Object.keys(prod).forEach(k=>{if(prod[k]===null)delete prod[k];});
           S.products.push(prod);
           addToHistory(prod);
           added.push(p.name);
@@ -2914,6 +2937,24 @@ function saveSettings(silent){
   };
   save();if(!silent)alert('Сохранено');
 }
+function syncFridgeToHistory(){
+  if(!S.products.length){alert('Холодильник пуст');return;}
+  let added=0;
+  S.products.forEach(p=>{ 
+    const idx=(S.productHistory||[]).findIndex(x=>x.name.toLowerCase()===p.name.toLowerCase()||(p.barcode&&x.barcode===p.barcode));
+    if(idx>=0){
+      // Обновляем существующую запись полными данными
+      S.productHistory[idx]={...S.productHistory[idx],...p};
+    }else{
+      if(!S.productHistory)S.productHistory=[];
+      S.productHistory.push({...p});
+      added++;
+    }
+  });
+  save();
+  alert(`База синхронизирована с холодильником. Добавлено новых записей: ${added}.`);
+}
+
 function refreshAllIcons(){
   let updated=0;
   S.products.forEach(p=>{
@@ -3003,7 +3044,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.6.6';
+const APP_VERSION='1.6.7';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
