@@ -835,6 +835,7 @@ function switchNav(name,btn){
   if(name==='products')renderProducts();
   if(name==='dishes')renderDishes();
   if(name==='gut')renderGut();
+  if(name==='chat')renderChatHistory();
 }
 
 // Перехватываем кнопку назад смартфона
@@ -1167,6 +1168,8 @@ function fillManualFormFromProduct(p, similar){
   clearManualForm();
   if(p.name)document.getElementById('pm-name').value=p.name;
   if(p.barcode)document.getElementById('pm-barcode').value=p.barcode;
+  // Устанавливаем иконку по названию если дефолтная
+  if(p.name)p.icon=getProductIcon(p.name);
   // Числовые поля — заполняем если не null (включая 0)
   const numFields={'pm-kcal':'kcal','pm-prot':'prot','pm-fat':'fat','pm-carb':'carb'};
   Object.entries(numFields).forEach(([id,key])=>{
@@ -1474,7 +1477,25 @@ function isToday(d){const t=new Date();return d.getDate()===t.getDate()&&d.getMo
 function isPast(d){const t=new Date();t.setHours(0,0,0,0);return d<t;}
 function expSt(s){if(!s)return'ok';const diff=(new Date(s)-new Date())/864e5;if(diff<0)return'bad';if(diff<3)return'warn';return'ok';}
 function fmtExp(s){if(!s)return'—';return new Date(s).toLocaleDateString('ru-RU',{day:'numeric',month:'short'});}
-function parseExp(s){if(!s)return null;const p=s.split('.');if(p.length===3&&p[2].length===4)return`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;return s;}
+function parseExp(s){
+  if(!s)return null;
+  s=s.trim();
+  // YYYY-MM-DD
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  // DD.MM.YYYY или DD/MM/YYYY или DD-MM-YYYY
+  let m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
+  if(m)return`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  // MM.YYYY или MM/YYYY — берём последний день месяца
+  m=s.match(/^(\d{1,2})[.\/-](\d{4})$/);
+  if(m){const d=new Date(parseInt(m[2]),parseInt(m[1]),0);return d.toISOString().split('T')[0];}
+  // YYYY.MM или YYYY/MM
+  m=s.match(/^(\d{4})[.\/-](\d{1,2})$/);
+  if(m){const d=new Date(parseInt(m[1]),parseInt(m[2]),0);return d.toISOString().split('T')[0];}
+  // Просто год — берём конец года
+  m=s.match(/^(\d{4})$/);
+  if(m)return`${m[1]}-12-31`;
+  return null;
+}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 function getMeals(){
@@ -1985,8 +2006,18 @@ ${remain}
 }
 
 /* ── CHAT ── */
-function autoR(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,85)+'px';}
-function chatKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}}
+function renderChatHistory(){
+  const msgs=document.getElementById('chatMessages');
+  if(!msgs)return;
+  // Приветствие всегда первым
+  let html=`<div class="msg ma">Привет! Я знаю что у тебя в холодильнике, твои цели и предпочтения. Спрашивай что угодно — подробный рецепт, чем заменить ингредиент, что приготовить из остатков, вопросы про нутриенты, пожелания к конкретному дню меню. Просто напиши!</div>`;
+  (S.chatHistory||[]).forEach(m=>{
+    html+=`<div class="msg ${m.role==='user'?'mu':'ma'}">${esc(m.content)}</div>`;
+  });
+  msgs.innerHTML=html;
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
 async function sendChat(){
   const inp=document.getElementById('chatInput');const text=inp.value.trim();if(!text)return;
   inp.value='';inp.style.height='auto';
@@ -2008,34 +2039,60 @@ async function sendChat(){
 - Проблемы с ЖКТ: ${gutBad}
 - Тренировки: ${(S.settings.workoutDays||[]).map(i=>['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i]).join(', ')||'нет'}
 
-Ты можешь помочь с чем угодно: подробный рецепт, замена ингредиента, вопросы про нутриенты, что приготовить из остатков, советы по готовке, пожелания к дням меню. Также можешь обсуждать психологическую сторону отношений с едой — эмоциональное заедание, чувство голода и насыщения, тревогу вокруг еды, пищевое поведение. Отвечай вдумчиво и без осуждения. Если тема требует работы со специалистом — скажи об этом мягко, но не отказывайся от разговора. Если пожелание к конкретному дню — подтверди и предупреди о возможных проблемах со сроками годности продуктов.`,1200);
+Ты можешь помочь с чем угодно: подробный рецепт, замена ингредиента, вопросы про нутриенты, что приготовить из остатков, советы по готовке, пожелания к дням меню. Также можешь обсуждать психологическую сторону отношений с едой. Отвечай вдумчиво и без осуждения.
+
+ВАЖНО: Если пользователь просит добавить продукты в холодильник — в конце ответа добавь блок:
+<ADD_PRODUCTS>
+[{"name":"Название","weight":число,"kcal":число,"prot":число,"fat":число,"carb":число}]
+</ADD_PRODUCTS>
+Если добавлять ничего не нужно — не добавляй этот блок.`,1200);
   if(resp&&typeof resp==='string'){
-    S.chatHistory.push({role:'assistant',content:resp});loading.textContent=resp;
+    // Проверяем есть ли команда добавления продуктов
+    const addMatch=resp.match(/<ADD_PRODUCTS>([\s\S]*?)<\/ADD_PRODUCTS>/);
+    let displayText=resp.replace(/<ADD_PRODUCTS>[\s\S]*?<\/ADD_PRODUCTS>/,'').trim();
+    if(addMatch){
+      try{
+        const products=JSON.parse(addMatch[1].trim());
+        const added=[];
+        products.forEach(p=>{
+          if(!p.name)return;
+          const prod={
+            id:Date.now()+Math.random(),
+            name:p.name,
+            icon:getProductIcon(p.name),
+            weight:p.weight||0,
+            expiry:autoExpiry(p.name,false),
+            opened:false,
+            kcal:p.kcal||0,prot:p.prot||0,fat:p.fat||0,carb:p.carb||0,
+          };
+          S.products.push(prod);
+          addToHistory(prod);
+          added.push(p.name);
+        });
+        if(added.length){
+          save();
+          displayText+=`\n\n✓ Добавлено в холодильник: ${added.join(', ')}`;
+        }
+      }catch(e){}
+    }
+    S.chatHistory.push({role:'assistant',content:displayText});
+    loading.textContent=displayText;
+    save();
     if(text.match(/день|пн|вт|ср|чт|пт|сб|вс|понедел|вторн|среду|четверг|пятн|суббот|воскрес/i)){S.wishes.push(text);save();}
-    // Распознаём запрос на перекус
     if(text.match(/перекус|хочу есть|голод|проголодал|добавь.*перекус|лёгкий.*приём/i)){
       const todayIdx=weekDays().findIndex(d=>isToday(d.date));
       if(todayIdx>=0){
         const meal=await addExtraMeal(todayIdx,'Перекус',text);
-        if(meal){
-          loading.textContent+=`\n\nДобавила перекус в сегодняшнее меню: ${meal.name} (~${meal.kcal}ккал).`;
-          renderMenu();
-        }
+        if(meal){loading.textContent+=`\n\nДобавила перекус в сегодняшнее меню: ${meal.name} (~${meal.kcal}ккал).`;renderMenu();}
       }
-      // Трекинг паттерна голода
       if(!S.hungerLog)S.hungerLog=[];
-      S.hungerLog.push({date:new Date().toISOString(),text});
-      save();
-      // Если голод часто — предложить скорректировать КБЖУ
+      S.hungerLog.push({date:new Date().toISOString(),text});save();
       const recentHunger=S.hungerLog.filter(h=>Date.now()-new Date(h.date)<7*864e5);
       if(recentHunger.length>=3&&!S.hungerSuggested){
         S.hungerSuggested=true;save();
         setTimeout(()=>{
           const newKcal=Math.round((S.settings.kcal||2000)*1.1);
-          if(confirm(`Замечаю частые запросы про голод (${recentHunger.length} раз за неделю). Возможно, текущая норма ${S.settings.kcal}ккал недостаточна.\nПредлагаю попробовать ${newKcal}ккал (+10%). Применить?`)){
-            S.settings.kcal=newKcal;save();
-            document.getElementById('s-kcal').value=newKcal;
-          }
+          if(confirm(`Замечаю частые запросы про голод (${recentHunger.length} раз за неделю). Норма ${S.settings.kcal}ккал недостаточна?\nПопробовать ${newKcal}ккал (+10%)?`)){S.settings.kcal=newKcal;save();document.getElementById('s-kcal').value=newKcal;}
         },1000);
       }
     }
@@ -2946,7 +3003,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.6.5';
+const APP_VERSION='1.6.6';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
