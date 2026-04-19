@@ -332,6 +332,9 @@ select option{background:#1a1a2e;color:var(--text)}
     <button class="bs" onclick="generateWeekMenu()">↺ Пересоставить меню</button>
     <button class="bs" onclick="refreshAllIcons()">🎨 Обновить иконки продуктов</button>
     <button class="bs" onclick="syncFridgeToHistory()">🔄 Синхронизировать базу с холодильником</button>
+    <button class="bs" onclick="exportData()">📤 Экспорт данных (резервная копия)</button>
+    <button class="bs" onclick="document.getElementById('importFile').click()">📥 Импорт данных</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
     <button class="bs" onclick="clearMenu()" style="color:var(--acc);border-color:rgba(233,69,96,0.3)">Сбросить меню</button>
   </div>
 </div>
@@ -3044,6 +3047,69 @@ function refreshAllIcons(){
   else alert('Все иконки уже актуальны.');
 }
 
+function exportData(){
+  const data={
+    exportedAt:new Date().toISOString(),
+    appVersion:APP_VERSION,
+    products:S.products,
+    productHistory:S.productHistory,
+    menu:S.menu,
+    dishes:S.dishes,
+    gutLog:S.gutLog,
+    wishes:S.wishes,
+    chatHistory:S.chatHistory,
+    yazioHistory:S.yazioHistory,
+    yazioData:S.yazioData,
+    yazioProfile:S.yazioProfile,
+    yazioMapping:S.yazioMapping,
+    settings:S.settings,
+  };
+  const json=JSON.stringify(data,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`nutrition_backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  event.target.value='';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data.products&&!data.settings){alert('Неверный формат файла');return;}
+      if(!confirm(`Импортировать данные от ${data.exportedAt?new Date(data.exportedAt).toLocaleDateString('ru-RU'):'?'}?\n\nПродуктов: ${data.products?.length||0}\nИстория Yazio: ${Object.keys(data.yazioHistory||{}).length} дней\n\nТекущие данные будут заменены.`))return;
+      // Применяем импортированные данные
+      if(data.products)S.products=data.products;
+      if(data.productHistory)S.productHistory=data.productHistory;
+      if(data.menu)S.menu=data.menu;
+      if(data.dishes)S.dishes=data.dishes;
+      if(data.gutLog)S.gutLog=data.gutLog;
+      if(data.wishes)S.wishes=data.wishes;
+      if(data.chatHistory)S.chatHistory=data.chatHistory;
+      if(data.yazioHistory)S.yazioHistory=data.yazioHistory;
+      if(data.yazioData)S.yazioData=data.yazioData;
+      if(data.yazioProfile)S.yazioProfile=data.yazioProfile;
+      if(data.yazioMapping)S.yazioMapping=data.yazioMapping;
+      if(data.settings){
+        // Настройки мержим — не перезаписываем API ключ если его нет в файле
+        S.settings={...S.settings,...data.settings};
+      }
+      save();
+      alert('✓ Данные импортированы успешно!');
+      location.reload();
+    }catch(err){
+      alert('Ошибка чтения файла: '+err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
 function clearMenu(){if(!confirm('Сбросить меню?'))return;S.menu=null;S.shopping=[];save();renderMenu();}
 
 /* ── CALCULATOR ── */
@@ -3116,7 +3182,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.7.3';
+const APP_VERSION='1.7.4';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
