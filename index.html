@@ -783,7 +783,7 @@ let S={
   gutLog:[],     // {id,date,meal,status:'ok'|'bad',note,time}
   gutPending:null, // {dayIdx,mealType} — ожидает оценки
   yazioData:null,
-  prevScreen:'menu',currentDayIdx:null
+  prevScreen:'menu',currentDayIdx:null,yazioDeducted:{}
 };
 
 function load(){try{const d=localStorage.getItem('np_v4');if(d)S=Object.assign(S,JSON.parse(d));}catch(e){}}
@@ -2318,12 +2318,13 @@ async function testDeduction(){
   if(!S.yazioData){alert('Сначала загрузи данные Yazio');return;}
   if(!S.products.length){alert('Холодильник пуст');return;}
   const el=document.getElementById('yazioInfo');
-  if(el)el.innerHTML=`<div class="yz-ok">Тест вычитания запущен...</div>`;
-  await deductFromFridge(S.yazioData,[]);
+  if(el)el.innerHTML=`<div class="yz-ok">🧪 Тест (без изменений холодильника)...</div>`;
+  // dryRun=true — только диагностика, ничего не вычитает
+  await deductFromFridge(S.yazioData,[],true);
 }
 
 /* ── ВЫЧИТАНИЕ ИЗ ХОЛОДИЛЬНИКА ПО ФАКТУ YAZIO ── */
-async function deductFromFridge(yazioData, updatedDates){
+async function deductFromFridge(yazioData, updatedDates, dryRun=false){
   const el=document.getElementById('yazioInfo');
   const addInfo=msg=>{if(el)el.innerHTML+=`<div style="font-size:11px;color:var(--text2);margin-top:3px">🔍 ${msg}</div>`;};
 
@@ -2338,8 +2339,7 @@ async function deductFromFridge(yazioData, updatedDates){
   const yesterdayDay=diary.find(d=>d.date===yesterday);
   addInfo(`сегодня (${today}): ${todayDay?`${(todayDay.dishes||[]).length} блюд`:'нет в файле'} | вчера (${yesterday}): ${yesterdayDay?`${(yesterdayDay.dishes||[]).length} блюд`:'нет в файле'}`);
 
-  // Берём сегодня и вчера независимо от updatedDates
-  // (updatedDates может быть пустым если данные загружены ранее)
+  // Берём сегодня и вчера — повторная синхронизация дополнит разницу
   const relevantDays=diary.filter(d=>
     (d.date===today||d.date===yesterday)&&(d.dishes||[]).length>0
   );
@@ -2348,7 +2348,7 @@ async function deductFromFridge(yazioData, updatedDates){
     addInfo('нет данных за сегодня/вчера с блюдами');
     return;
   }
-  addInfo(`найдено ${relevantDays.length} дн. с блюдами → сопоставляю`);
+  addInfo(`найдено ${relevantDays.length} дн. с блюдами → сопоставляю${dryRun?' (тест)':''}`);
 
   if(!S.yazioMapping)S.yazioMapping={};// {yazioDishName: fridgeProductName|null}
 
@@ -2395,7 +2395,10 @@ async function deductFromFridge(yazioData, updatedDates){
   }
 
   // Применяем известные сопоставления
-  if(!known.length)return;
+  if(!known.length){
+    addInfo('нет сопоставлений — добавь продукты в маппинг через подтверждение');
+    return;
+  }
 
   // Сначала вскрытые продукты
   const sortedKnown=[...known].sort((a,b)=>{
@@ -2406,30 +2409,44 @@ async function deductFromFridge(yazioData, updatedDates){
 
   const log=[];
   relevantDays.forEach(d=>{
+    // Инициализируем запись для этого дня если нет
+    if(!dryRun&&!S.yazioDeducted[d.date])S.yazioDeducted[d.date]={};
+    const dayDeducted=S.yazioDeducted[d.date]||{};
+
     (d.dishes||[]).forEach(dish=>{
       const normName=dish.replace(/\s*—\s*[\d,.]+\s*(г|мл|g|ml)\s*$/i,'').trim();
       const gramsMatch=dish.match(/—\s*([\d,.]+)\s*(г|мл|g|ml)/i);
-      const grams=gramsMatch?parseFloat(gramsMatch[1].replace(',','.')):0;
-      if(!grams)return;
+      const totalGrams=gramsMatch?parseFloat(gramsMatch[1].replace(',','.')):0;
+      if(!totalGrams)return;
       const mapping=sortedKnown.find(k=>k.normName===normName);
       if(!mapping)return;
       const prod=S.products.find(p=>p.name===mapping.target);
-      if(prod&&grams>0){
-        const before=prod.weight;
-        prod.weight=Math.max(0,Math.round(prod.weight-grams));
-        log.push(`${prod.name}: ${before}г → ${prod.weight}г`);
+      if(!prod||totalGrams<=0)return;
+
+      // Сколько уже вычли за этот день по этому продукту
+      const alreadyDeducted=dayDeducted[normName]||0;
+      const toDeduct=Math.max(0,totalGrams-alreadyDeducted);
+      if(toDeduct<=0)return;// уже всё вычли
+
+      const before=prod.weight;
+      if(!dryRun){
+        prod.weight=Math.max(0,Math.round(prod.weight-toDeduct));
+        S.yazioDeducted[d.date][normName]=totalGrams;// запоминаем итоговое значение
       }
+      const after=dryRun?Math.max(0,Math.round(before-toDeduct)):prod.weight;
+      log.push(`${prod.name}: ${before}г → ${after}г (−${toDeduct}г${alreadyDeducted?`, ранее уже −${alreadyDeducted}г`:''})`);
     });
   });
 
   if(log.length){
-    save();
-    // Показываем лог в info-блоке настроек
+    if(!dryRun)save();
     const el=document.getElementById('yazioInfo');
     if(el){
-      const existing=el.innerHTML;
-      el.innerHTML=existing+`<div class="na" style="margin-top:6px;font-size:11px">📦 Вычтено из холодильника:<br>${log.join('<br>')}</div>`;
+      const icon=dryRun?'🧪':'📦';
+      el.innerHTML+=`<div class="na" style="margin-top:6px;font-size:11px">${icon} ${dryRun?'Тест — вычтено бы:':'Вычтено из холодильника:'}<br>${log.join('<br>')}</div>`;
     }
+  }else{
+    addInfo('все блюда уже учтены или нет совпадений с граммовкой');
   }
 }
 
@@ -3120,6 +3137,7 @@ function exportData(){
     yazioData:S.yazioData,
     yazioProfile:S.yazioProfile,
     yazioMapping:S.yazioMapping,
+    yazioDeducted:S.yazioDeducted,
     settings:S.settings,
   };
   const json=JSON.stringify(data,null,2);
@@ -3240,7 +3258,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.7.5';
+const APP_VERSION='1.7.7';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
