@@ -325,6 +325,7 @@ select option{background:#1a1a2e;color:var(--text)}
       </div>
       <div id="yazioInfo"></div>
       <button class="bs" onclick="loadYazio()" style="margin-top:4px">↺ Загрузить данные Yazio</button>
+      <button class="bs" onclick="testDeduction()" style="margin-top:4px;font-size:11px">🧪 Тест вычитания из холодильника</button>
       <button class="bs" onclick="startYazioDeepAnalysis()" style="margin-top:6px;border-color:rgba(129,140,248,0.4);color:#818cf8">🔬 Глубокий анализ истории (3 мес.)</button>
       <button class="bs" onclick="showYazioProfile()" id="btnShowProfile" style="display:none;margin-top:6px">👤 Просмотреть профиль питания</button>
     </div>
@@ -1372,9 +1373,12 @@ async function addProductForm(){
     kcal,prot,fat,carb,...readNutrition('p')};
   // Кнопка — показываем загрузку
   const btn=document.querySelector('#scr-add-photo .bp[onclick="addProductForm()"]');
-  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Обогащаю данные...';}
-  prod=await enrichProductData(prod);
-  if(btn){btn.disabled=false;btn.innerHTML='Добавить в холодильник';}
+  try{
+    if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Обогащаю данные...';}
+    prod=await enrichProductData(prod);
+  }catch(e){}finally{
+    if(btn){btn.disabled=false;btn.innerHTML='Добавить в холодильник';}
+  }
   S.products.push(prod);
   addToHistory(prod);
   S._formDraft=null;save();clearPForm();
@@ -1403,10 +1407,13 @@ async function addProductManual(){
     weight:parseFloat(document.getElementById('pm-weight').value)||0,
     expiry,opened,afterOpenDays:afterOpenDays||null,barcode,
     kcal,prot,fat,carb,...readNutrition('pm')};
-  const btn=document.querySelector('#scr-add-manual .bp');
-  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Обогащаю данные...';}
-  prod=await enrichProductData(prod);
-  if(btn){btn.disabled=false;btn.innerHTML='Добавить в холодильник';}
+  const btn=document.querySelector('#scr-add-manual .bp:not([onclick*="save"])');
+  try{
+    if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Обогащаю данные...';}
+    prod=await enrichProductData(prod);
+  }catch(e){}finally{
+    if(btn){btn.disabled=false;btn.innerHTML=editingProductId?'Сохранить изменения':'Добавить в холодильник';}
+  }
   S.products.push(prod);
   addToHistory(prod);
   S._formDraft=null;save();clearManualForm();
@@ -1524,26 +1531,68 @@ function expSt(s){if(!s)return'ok';const diff=(new Date(s)-new Date())/864e5;if(
 function fmtExp(s){if(!s)return'—';return new Date(s).toLocaleDateString('ru-RU',{day:'numeric',month:'short'});}
 function parseExp(s){
   if(!s)return null;
-  s=s.trim();
+  s=s.trim().replace(/\s/g,'');
+  if(!s)return null;
   // YYYY-MM-DD
   if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
-  // DD.MM.YYYY или DD/MM/YYYY или DD-MM-YYYY
+  // DD.MM.YYYY или DD/MM/YYYY (4-значный год)
   let m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
   if(m)return`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-  // MM.YYYY или MM/YYYY — берём последний день месяца
+  // DD.MM.YY (2-значный год) — например 26.11.28
+  m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2})$/);
+  if(m){const year=2000+parseInt(m[3]);return`${year}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;}
+  // MM.YYYY — последний день месяца
   m=s.match(/^(\d{1,2})[.\/-](\d{4})$/);
   if(m){const d=new Date(parseInt(m[2]),parseInt(m[1]),0);return d.toISOString().split('T')[0];}
-  // YYYY.MM или YYYY/MM
+  // YYYY.MM
   m=s.match(/^(\d{4})[.\/-](\d{1,2})$/);
   if(m){const d=new Date(parseInt(m[1]),parseInt(m[2]),0);return d.toISOString().split('T')[0];}
-  // MM.YY или MM/YY — двузначный год
+  // MM.YY (2-значный год) — например 05.26
   m=s.match(/^(\d{1,2})[.\/-](\d{2})$/);
   if(m){const year=2000+parseInt(m[2]);const d=new Date(year,parseInt(m[1]),0);return d.toISOString().split('T')[0];}
-  // Просто год — берём конец года
+  // Просто год
   m=s.match(/^(\d{4})$/);
   if(m)return`${m[1]}-12-31`;
   return null;
 }
+function searchProducts(query, products){
+  if(!query)return products;
+  const q=query.toLowerCase().trim();
+  const words=q.split(/\s+/).filter(Boolean);
+
+  return products.filter(p=>{
+    const name=(p.name||'').toLowerCase();
+    const barcode=(p.barcode||'').toLowerCase();
+
+    // 1. Точное совпадение штрихкода
+    if(barcode&&barcode.includes(q))return true;
+
+    // 2. Все слова присутствуют в названии (поиск по нескольким словам)
+    if(words.every(w=>name.includes(w)))return true;
+
+    // 3. Нечёткий поиск — каждое слово запроса похоже на какое-то слово в названии
+    if(words.every(w=>{
+      const nameParts=name.split(/[\s,.-]+/);
+      return nameParts.some(part=>{
+        if(part.includes(w)||w.includes(part.substring(0,3)))return true;
+        // Расстояние Левенштейна для коротких слов
+        if(w.length>=4&&part.length>=4&&levenshtein(w,part)<=2)return true;
+        return false;
+      });
+    }))return true;
+
+    return false;
+  });
+}
+
+function levenshtein(a,b){
+  const m=a.length,n=b.length;
+  const dp=Array.from({length:m+1},(_,i)=>Array.from({length:n+1},(_,j)=>i===0?j:j===0?i:0));
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  return dp[m][n];
+}
+
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 function getMeals(){
@@ -1598,9 +1647,8 @@ function renderMenu(){
 /* ── RENDER PRODUCTS ── */
 function renderProducts(){
   const el=document.getElementById('productsList');
-  const q=(document.getElementById('productsSearch')?.value||'').toLowerCase().trim();
-  let products=[...S.products];
-  if(q)products=products.filter(p=>p.name.toLowerCase().includes(q));
+  const q=(document.getElementById('productsSearch')?.value||'').trim();
+  let products=searchProducts(q,S.products);
   if(!products.length){
     el.innerHTML=q
       ?`<p style="font-size:12px;color:var(--text2);padding:6px 0">Ничего не найдено по запросу «${esc(q)}»</p>`
@@ -2266,6 +2314,14 @@ async function loadYazio(){
   }
 }
 
+async function testDeduction(){
+  if(!S.yazioData){alert('Сначала загрузи данные Yazio');return;}
+  if(!S.products.length){alert('Холодильник пуст');return;}
+  const el=document.getElementById('yazioInfo');
+  if(el)el.innerHTML=`<div class="yz-ok">Тест вычитания запущен...</div>`;
+  await deductFromFridge(S.yazioData,[]);
+}
+
 /* ── ВЫЧИТАНИЕ ИЗ ХОЛОДИЛЬНИКА ПО ФАКТУ YAZIO ── */
 async function deductFromFridge(yazioData, updatedDates){
   const el=document.getElementById('yazioInfo');
@@ -2280,17 +2336,19 @@ async function deductFromFridge(yazioData, updatedDates){
 
   const todayDay=diary.find(d=>d.date===today);
   const yesterdayDay=diary.find(d=>d.date===yesterday);
-  addInfo(`сегодня (${today}): ${todayDay?`${(todayDay.dishes||[]).length} блюд`:'нет в файле'} | вчера (${yesterday}): ${yesterdayDay?`${(yesterdayDay.dishes||[]).length} блюд`:'нет в файле'} | updatedDates: [${updatedDates.join(',')}]`);
+  addInfo(`сегодня (${today}): ${todayDay?`${(todayDay.dishes||[]).length} блюд`:'нет в файле'} | вчера (${yesterday}): ${yesterdayDay?`${(yesterdayDay.dishes||[]).length} блюд`:'нет в файле'}`);
 
+  // Берём сегодня и вчера независимо от updatedDates
+  // (updatedDates может быть пустым если данные загружены ранее)
   const relevantDays=diary.filter(d=>
-    updatedDates.includes(d.date)&&(d.date===today||d.date===yesterday)&&(d.dishes||[]).length>0
+    (d.date===today||d.date===yesterday)&&(d.dishes||[]).length>0
   );
 
   if(!relevantDays.length){
-    addInfo('нет подходящих дней — вычитание пропущено');
+    addInfo('нет данных за сегодня/вчера с блюдами');
     return;
   }
-  addInfo(`найдено ${relevantDays.length} дн. → начинаю сопоставление`);
+  addInfo(`найдено ${relevantDays.length} дн. с блюдами → сопоставляю`);
 
   if(!S.yazioMapping)S.yazioMapping={};// {yazioDishName: fridgeProductName|null}
 
@@ -3182,7 +3240,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.7.4';
+const APP_VERSION='1.7.5';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
