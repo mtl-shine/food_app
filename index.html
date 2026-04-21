@@ -2327,17 +2327,14 @@ async function loadYazio(){
   const url=`https://${g.githubUser}.github.io/${g.githubRepo}/yazio_data.json`;
   const el=document.getElementById('yazioInfo');
   if(el)el.innerHTML=`<div style="font-size:12px;color:var(--text2)"><span class="spin"></span> Загружаю...</div>`;
+  let updatedDates=[];
   try{
     const r=await fetch(url+'?t='+Date.now());
     if(!r.ok)throw new Error('Файл не найден');
     const data=await r.json();
 
-    // ── МЕРЖ ДНЕВНИКА ──
-    // Инициализируем хранилище истории если нет
     if(!S.yazioHistory)S.yazioHistory={};
-    // Добавляем/обновляем только дни из нового файла — старые не трогаем
     const newDays=data.diary||[];
-    const updatedDates=[];
     newDays.forEach(day=>{
       S.yazioHistory[day.date]=day;
       updatedDates.push(day.date);
@@ -2509,11 +2506,9 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
   addInfo(`блюд сегодня/вчера: ${allDishes.length} уникальных → известных: ${known.length}, новых: ${unknown.length}`);
 
   if(unknown.length>0&&!dryRun){
-    // Показываем порциями по 20 чтобы форма не зависала
-    const batch=unknown.slice(0,20);
-    const remaining=unknown.length-batch.length;
-    addInfo(`${unknown.length} новых блюд → показываю форму (${batch.length} из ${unknown.length}${remaining>0?`, ещё ${remaining} при следующей синхронизации`:''})`);
-    await showMappingConfirmation(batch);
+    addInfo(`${unknown.length} новых блюд → показываю форму сопоставления`);
+    alert(`Сейчас должна появиться форма сопоставления (${unknown.length} блюд)`);
+    await showMappingConfirmation(unknown);
     addInfo('Маппинг сохранён, применяю вычитание...');
     await deductFromFridge(yazioData,[],false);
     return;
@@ -3472,7 +3467,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.9.1';
+const APP_VERSION='1.9.4';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
