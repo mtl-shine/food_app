@@ -2509,9 +2509,11 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
   addInfo(`блюд сегодня/вчера: ${allDishes.length} уникальных → известных: ${known.length}, новых: ${unknown.length}`);
 
   if(unknown.length>0&&!dryRun){
-    addInfo(`${unknown.length} новых блюд без сопоставления → показываю форму`);
-    await showMappingConfirmation(unknown);
-    // После подтверждения — запускаем вычитание снова с новым маппингом
+    // Показываем порциями по 20 чтобы форма не зависала
+    const batch=unknown.slice(0,20);
+    const remaining=unknown.length-batch.length;
+    addInfo(`${unknown.length} новых блюд → показываю форму (${batch.length} из ${unknown.length}${remaining>0?`, ещё ${remaining} при следующей синхронизации`:''})`);
+    await showMappingConfirmation(batch);
     addInfo('Маппинг сохранён, применяю вычитание...');
     await deductFromFridge(yazioData,[],false);
     return;
@@ -3470,7 +3472,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.9.0';
+const APP_VERSION='1.9.1';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
