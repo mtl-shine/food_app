@@ -2380,8 +2380,12 @@ async function loadYazio(){
   }
   // Всё что ниже — вне try/catch, ошибки не скроют диагностику
   try{await correctTodayByYazio(S.yazioData);}catch(e){}
+  const elInfo=document.getElementById('yazioInfo');
+  if(elInfo)elInfo.innerHTML+=`<div style="font-size:11px;color:var(--text2);margin-top:3px">▶ products:${S.products.length}, diary:${S.yazioData?.diary?.length||0}</div>`;
   if(S.products.length>0){
     await deductFromFridge(S.yazioData, updatedDates);
+  }else{
+    if(elInfo)elInfo.innerHTML+=`<div style="font-size:11px;color:var(--acc2);margin-top:3px">⚠ Холодильник пуст — вычитание пропущено</div>`;
   }
 }
 
@@ -3391,7 +3395,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.8.6';
+const APP_VERSION='1.8.7';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
