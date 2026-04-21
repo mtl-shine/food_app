@@ -901,7 +901,17 @@ function subScreen(name,title,prev){
   show(name);
 }
 
-function switchToSettings(){subScreen('settings','Настройки',curNav()||'menu');}
+function switchToSettings(){
+  // Настройки — как основная вкладка, не подэкран
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  document.getElementById('backBtn').style.display='none';
+  document.getElementById('mainNav').style.display='flex';
+  document.getElementById('refreshBtn').style.display='flex';
+  document.getElementById('hTitle').textContent='Моё питание';
+  S.currentScreen={name:'settings',isMain:true};save();
+  show('settings');
+  initSettingsUI();
+}
 function toCalc(){subScreen('calc','Калькулятор КБЖУ','settings');}
 function showAddProduct(){subScreen('add-product','Добавить продукт','products');}
 
@@ -2534,7 +2544,6 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
 
   const log=[];
   relevantDays.forEach(d=>{
-    // Инициализируем запись для этого дня если нет
     if(!dryRun&&!S.yazioDeducted[d.date])S.yazioDeducted[d.date]={};
     const dayDeducted=S.yazioDeducted[d.date]||{};
 
@@ -2545,21 +2554,33 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
       if(!totalGrams)return;
       const mapping=sortedKnown.find(k=>k.normName===normName);
       if(!mapping)return;
-      const prod=S.products.find(p=>p.name===mapping.target);
-      if(!prod||totalGrams<=0)return;
 
-      // Сколько уже вычли за этот день по этому продукту
       const alreadyDeducted=dayDeducted[normName]||0;
-      const toDeduct=Math.max(0,totalGrams-alreadyDeducted);
-      if(toDeduct<=0)return;// уже всё вычли
+      let toDeduct=Math.max(0,totalGrams-alreadyDeducted);
+      if(toDeduct<=0)return;
 
-      const before=prod.weight;
-      if(!dryRun){
-        prod.weight=Math.max(0,Math.round(prod.weight-toDeduct));
-        S.yazioDeducted[d.date][normName]=totalGrams;// запоминаем итоговое значение
+      // Все упаковки этого продукта — сначала вскрытые
+      const packages=S.products
+        .filter(p=>p.name===mapping.target)
+        .sort((a,b)=>(b.opened?1:0)-(a.opened?1:0));
+
+      for(const prod of packages){
+        if(toDeduct<=0)break;
+        const before=prod.weight;
+        const deductFromThis=Math.min(toDeduct,prod.weight);
+        if(!dryRun){
+          prod.weight=Math.max(0,Math.round(prod.weight-deductFromThis));
+          // Если упаковка опустела — помечаем следующую как вскрытую
+          if(prod.weight===0){
+            const nextPkg=packages.find(p=>p!==prod&&!p.opened&&p.weight>0);
+            if(nextPkg)nextPkg.opened=true;
+          }
+        }
+        const after=dryRun?Math.max(0,Math.round(before-deductFromThis)):prod.weight;
+        if(deductFromThis>0)log.push(`${prod.name}${prod.opened?' 📭':''}: ${before}г → ${after}г (−${deductFromThis}г)`);
+        toDeduct-=deductFromThis;
       }
-      const after=dryRun?Math.max(0,Math.round(before-toDeduct)):prod.weight;
-      log.push(`${prod.name}: ${before}г → ${after}г (−${toDeduct}г${alreadyDeducted?`, ранее уже −${alreadyDeducted}г`:''})`);
+      if(!dryRun)S.yazioDeducted[d.date][normName]=totalGrams;
     });
   });
 
@@ -2576,55 +2597,78 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
 }
 
 async function showMappingConfirmation(unknown){
+  // Получаем предложения от Claude
+  const fridgeList=S.products.map(p=>`${p.name}${p.opened?' (вскрыта)':''} ${p.weight}г`).join(', ');
+  let suggestions={};
+  try{
+    const resp=await claude([{role:'user',content:`Сопоставь блюда из Yazio с продуктами в холодильнике. Если нет подходящего — null.
+Блюда: ${unknown.map(u=>u.normName).join(', ')}
+Холодильник: ${fridgeList}
+ТОЛЬКО JSON: {"matches":{"блюдо":"точное название из холодильника или null"}}`}],
+    'Только JSON без markdown.',800);
+    if(resp&&typeof resp==='string'){
+      const d=JSON.parse(resp.replace(/```json|```/g,'').trim());
+      suggestions=d.matches||{};
+    }
+  }catch(e){}
+
   return new Promise(resolve=>{
     const overlay=document.createElement('div');
     overlay.style.cssText='position:fixed;inset:0;background:rgba(26,26,46,0.97);z-index:100;overflow-y:auto;padding:16px;box-sizing:border-box';
 
-    const fridge=S.products.map(p=>p.name);
-    const fridgeOpts=`<option value="">— не в моём холодильнике —</option>`+
-      fridge.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    // Опции с пометкой вскрытых и количеством упаковок
+    const prodNames=[...new Set(S.products.map(p=>p.name))];
+    const fridgeOpts='<option value="">— не в моём холодильнике —</option>'+
+      prodNames.map(name=>{
+        const items=S.products.filter(p=>p.name===name);
+        const openedCount=items.filter(p=>p.opened).length;
+        const totalWeight=items.reduce((s,p)=>s+p.weight,0);
+        const label=`${name} (${totalWeight}г${openedCount?`, 📭 ${openedCount} вскр.`:''})`;
+        return`<option value="${esc(name)}">${esc(label)}</option>`;
+      }).join('');
 
     let html=`
-      <div style="font-size:15px;font-weight:600;margin-bottom:4px;padding-top:8px">Новые блюда из Yazio</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Укажи какому продукту в холодильнике соответствует каждое блюдо. Это запомнится навсегда — следующие вычитания будут автоматическими.</div>`;
+      <div style="font-size:15px;font-weight:600;margin-bottom:4px;padding-top:8px">Сопоставление блюд Yazio</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Claude предложил варианты — проверь и исправь если нужно.</div>
+      <input type="text" placeholder="🔍 Поиск блюда..." oninput="filterMappingItems(this.value)"
+        style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:8px;font-size:13px;box-sizing:border-box;margin-bottom:10px">
+      <div id="mappingItems">`;
 
     unknown.forEach((u,i)=>{
-      html+=`<div style="background:var(--cs);border-radius:10px;padding:12px;border:0.5px solid var(--cb);margin-bottom:10px">
-        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Блюдо из Yazio:</div>
-        <div style="font-size:14px;font-weight:500;margin-bottom:10px">${esc(u.normName)}</div>
-        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Продукт в холодильнике:</div>
-        <select id="map-${i}" style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:8px;font-size:13px">
-          ${fridgeOpts}
-        </select>
+      const sug=suggestions[u.normName];
+      const hasSug=sug&&sug!=='null'&&sug!==null;
+      const opts=hasSug?fridgeOpts.replace(`value="${esc(sug)}"`,`value="${esc(sug)}" selected`):fridgeOpts;
+      html+=`<div class="mapping-item" data-name="${esc(u.normName.toLowerCase())}"
+        style="background:var(--cs);border-radius:10px;padding:10px;border:0.5px solid ${hasSug?'rgba(74,222,128,0.3)':'var(--cb)'};margin-bottom:8px">
+        <div style="font-size:11px;color:var(--text2)">Из Yazio:</div>
+        <div style="font-size:13px;font-weight:500;margin:2px 0 6px">${esc(u.normName)}</div>
+        <select id="map-${i}" style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:7px;font-size:12px">${opts}</select>
       </div>`;
     });
 
-    html+=`
-      <button id="mapSaveBtn" style="width:100%;background:#4ade80;border:none;color:#000;padding:13px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px">✓ Сохранить и применить вычитание</button>
-      <button onclick="this.closest('[data-overlay]').remove()" style="width:100%;background:none;border:0.5px solid var(--cb);color:var(--text2);padding:11px;border-radius:10px;font-size:13px;cursor:pointer;margin-top:8px">Пропустить</button>`;
+    html+=`</div>
+      <button id="mapSaveBtn" style="width:100%;background:#4ade80;border:none;color:#000;padding:13px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px">✓ Сохранить</button>
+      <button id="mapSkipBtn" style="width:100%;background:none;border:0.5px solid var(--cb);color:var(--text2);padding:11px;border-radius:10px;font-size:13px;cursor:pointer;margin-top:8px">Пропустить</button>`;
 
     overlay.innerHTML=html;
     overlay.dataset.overlay='1';
 
-    // Кнопка сохранения — ждём нажатия
     overlay.querySelector('#mapSaveBtn').addEventListener('click',()=>{
       if(!S.yazioMapping)S.yazioMapping={};
       unknown.forEach((u,i)=>{
         const sel=overlay.querySelector(`#map-${i}`);
         S.yazioMapping[u.normName]=sel?.value||null;
       });
-      save();
-      overlay.remove();
-      resolve();
+      save();overlay.remove();resolve();
     });
-
-    // Пропустить — resolve без сохранения
-    overlay.querySelector('button:last-child').addEventListener('click',()=>{
-      overlay.remove();
-      resolve();
-    });
-
+    overlay.querySelector('#mapSkipBtn').addEventListener('click',()=>{overlay.remove();resolve();});
     document.body.appendChild(overlay);
+  });
+}
+
+function filterMappingItems(q){
+  document.querySelectorAll('.mapping-item').forEach(el=>{
+    el.style.display=el.dataset.name.includes(q.toLowerCase())?'block':'none';
   });
 }
 
@@ -3467,7 +3511,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.9.4';
+const APP_VERSION='1.9.5';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
