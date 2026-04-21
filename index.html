@@ -333,6 +333,7 @@ select option{background:#1a1a2e;color:var(--text)}
     <button class="bs" onclick="generateWeekMenu()">↺ Пересоставить меню</button>
     <button class="bs" onclick="refreshAllIcons()">🎨 Обновить иконки продуктов</button>
     <button class="bs" onclick="syncFridgeToHistory()">🔄 Синхронизировать базу с холодильником</button>
+    <button class="bs" onclick="verifyNutrientsByComposition()" id="btnVerifyNutrients">🔬 Проверить нутриенты по составу</button>
     <button class="bs" onclick="exportData()">📤 Экспорт данных (резервная копия)</button>
     <button class="bs" onclick="document.getElementById('importFile').click()">📥 Импорт данных</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
@@ -419,7 +420,7 @@ select option{background:#1a1a2e;color:var(--text)}
     <div class="card">
       <!-- Зона добавления фото -->
       <div id="photoZones">
-        <div class="pz" onclick="document.getElementById('photoInput').click()">
+        <div class="pz" onclick="startPhotoCapture()">
           <div class="ph">📷</div>
           <div class="pt">Сфотографировать упаковку<br><span style="font-size:10px;opacity:0.6">Можно добавить несколько фото — фронт, оборот, состав</span></div>
           <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="addPhotoToQueue(event)">
@@ -884,7 +885,16 @@ function subScreen(name,title,prev){
   document.getElementById('refreshBtn').style.display='none';
   document.getElementById('hTitle').textContent=title;
   history.pushState({screen:name,title,prev:S.prevScreen},'',location.href.split('#')[0]+'#'+name);
-  S.currentScreen={name,title,prev:S.prevScreen,isMain:false};save();
+  // Экраны добавления/редактирования не сохраняем как currentScreen —
+  // при перезапуске лучше вернуться на родительскую вкладку
+  const noSaveScreens=['add-manual','add-photo','add-text','add-barcode','add-product','add-dish'];
+  if(!noSaveScreens.includes(name)){
+    S.currentScreen={name,title,prev:S.prevScreen,isMain:false};save();
+  }else{
+    // Сохраняем родительскую вкладку как текущий экран
+    const parentTab=['products','menu','dishes','gut','settings'].includes(S.prevScreen)?S.prevScreen:'products';
+    S.currentScreen={name:parentTab,isMain:true};save();
+  }
   show(name);
 }
 
@@ -1388,11 +1398,10 @@ async function addProductForm(){
 async function addProductManual(){
   const name=document.getElementById('pm-name').value.trim();
   if(!name){alert('Укажи название');return;}
-  const kcal=parseFloat(document.getElementById('pm-kcal').value)||0;
-  const prot=parseFloat(document.getElementById('pm-prot').value)||0;
-  const fat=parseFloat(document.getElementById('pm-fat').value)||0;
-  const carb=parseFloat(document.getElementById('pm-carb').value)||0;
-  if(!kcal&&!prot&&!fat&&!carb){if(!confirm('Основные нутриенты не заполнены. Claude заполнит их автоматически. Продолжить?'))return;}
+  // Читаем основные поля — null если пусто (не заменяем на 0)
+  const gv=id=>{const v=document.getElementById(id)?.value;return v&&v.trim()!==''?parseFloat(v):null;};
+  const kcal=gv('pm-kcal'),prot=gv('pm-prot'),fat=gv('pm-fat'),carb=gv('pm-carb');
+  if(kcal==null&&prot==null&&fat==null&&carb==null){if(!confirm('Основные нутриенты не заполнены. Claude заполнит их автоматически. Продолжить?'))return;}
   const opened=document.getElementById('pm-opened').checked;
   const afterOpenDays=parseFloat(document.getElementById('pm-afteropen').value)||0;
   let expiry=parseExp(document.getElementById('pm-expiry').value);
@@ -1403,10 +1412,20 @@ async function addProductManual(){
     }else expiry=openedExpiry(expiry,name);
   }
   const barcode=document.getElementById('pm-barcode')?.value.trim()||null;
+  const nutrition=readNutrition('pm');
+  // Записываем какие поля заполнил пользователь явно
+  const allFields=['kcal','prot','fat','carb','fatSat','fatMono','fatPoly','fatTrans',
+    'sugar','fiber','starch','polyols','salt','chol',
+    'vitA','vitB1','vitB2','vitB6','vitB12','vitC','vitD','vitE','fe','ca','mg','zn'];
+  const basicVals={kcal,prot,fat,carb};
+  const _userFields=allFields.filter(k=>{
+    const v=k==='kcal'||k==='prot'||k==='fat'||k==='carb'?basicVals[k]:nutrition[k];
+    return v!=null;
+  });
   let prod={id:Date.now(),name,icon:getProductIcon(name),
     weight:parseFloat(document.getElementById('pm-weight').value)||0,
     expiry,opened,afterOpenDays:afterOpenDays||null,barcode,
-    kcal,prot,fat,carb,...readNutrition('pm')};
+    kcal,prot,fat,carb,...nutrition,_userFields};
   const btn=document.querySelector('#scr-add-manual .bp:not([onclick*="save"])');
   try{
     if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Обогащаю данные...';}
@@ -1453,18 +1472,23 @@ async function importFromText(){
 
   const today=new Date().toISOString().split('T')[0];
   const resp=await claude([{role:'user',content:`Разбери список продуктов и верни JSON. Сегодня ${today}.
-Для каждого продукта:
+Для каждого продукта заполни ВСЕ поля нутриентов на 100г из базы знаний (если пользователь не указал — используй стандартные значения):
 - name: название
-- weight: вес в граммах (если штуки — примерный вес: яйцо ~60г, помидор ~150г, огурец ~200г)
-- kcal, prot, fat, carb: на 100г — если указано пользователем, иначе стандартные значения из базы знаний
-- expiry: дата YYYY-MM-DD — если указано пользователем, иначе рассчитай от сегодня по типичным срокам хранения (зелень 4-5 дней, мягкие овощи 7 дней, твёрдые овощи 14 дней, мясо/рыба 2-3 дня, молочка 5-7 дней, крупы 1 год и т.д.)
-- opened: false если не указано иное
+- weight: вес в граммах (штуки → вес: яйцо ~60г, помидор ~150г, огурец ~200г)
+- expiry: YYYY-MM-DD (если указано — используй, иначе от сегодня: зелень 4-5д, овощи 7-14д, мясо/рыба 2-3д, молочка 5-7д, крупы 365д)
+- opened: false если не указано
 - icon: подходящий emoji
+- kcal, prot, fat, carb: основные нутриенты на 100г
+- fatSat, fatMono, fatPoly: жиры на 100г
+- sugar, fiber: углеводы на 100г
+- salt: соль на 100г
+- vitC, vitD, vitB12: витамины (мг или мкг/100г)
+- fe, ca, mg: минералы (мг/100г)
 
 Список:
 ${text}
 
-Ответь ТОЛЬКО JSON: {"products":[{"name":"...","weight":0,"expiry":"YYYY-MM-DD","kcal":0,"prot":0,"fat":0,"carb":0,"opened":false,"icon":"🥗"}]}`}],
+Ответь ТОЛЬКО JSON: {"products":[{"name":"...","weight":0,"expiry":"YYYY-MM-DD","kcal":0,"prot":0,"fat":0,"carb":0,"fatSat":0,"fatMono":0,"fatPoly":0,"sugar":0,"fiber":0,"salt":0,"vitC":0,"vitD":0,"vitB12":0,"fe":0,"ca":0,"mg":0,"opened":false,"icon":"🥗"}]}`}],
   'Ты разбираешь список продуктов. Только JSON без markdown.',2000);
 
   btn.disabled=false;btn.innerHTML='Добавить всё в холодильник';
@@ -1475,17 +1499,25 @@ ${text}
   try{
     const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
     const list=data.products||[];
-    list.forEach(p=>{
-      if(!S.products.find(x=>x.name.toLowerCase()===p.name.toLowerCase())){
-        S.products.push({id:Date.now()+Math.random(),...p});
-      }
-    });
+    let added=0;
+    for(const p of list){
+      if(!p.name)continue;
+      if(S.products.find(x=>x.name.toLowerCase()===p.name.toLowerCase()))continue;
+      const prod={
+        id:Date.now()+Math.random(),
+        ...p,
+        icon:p.icon&&p.icon!=='🥗'?p.icon:getProductIcon(p.name),
+        expiry:parseExp(p.expiry)||p.expiry||null,
+      };
+      // Удаляем null/undefined поля
+      Object.keys(prod).forEach(k=>{if(prod[k]==null)delete prod[k];});
+      S.products.push(prod);
+      addToHistory(prod);
+      added++;
+    }
     save();
-    status.innerHTML=`<div class="ng">✓ Добавлено ${list.length} продуктов</div>`;
-    setTimeout(()=>{
-      S.prevScreen='products';
-      goBack();
-    },1200);
+    status.innerHTML=`<div class="ng">✓ Добавлено ${added} продуктов</div>`;
+    setTimeout(()=>{S.prevScreen='products';goBack();},1200);
   }catch(e){
     status.innerHTML=`<div class="nr">Ошибка разбора. Попробуй ещё раз.</div>`;
   }
@@ -1501,6 +1533,7 @@ function showGutManual(){
 
 function goBack(){
   stopZxingScanner();
+  S._cameraReturn=null;
   document.getElementById('backBtn').style.display='none';
   document.getElementById('mainNav').style.display='flex';
   document.getElementById('hTitle').textContent='Моё питание';
@@ -1708,14 +1741,35 @@ function editProduct(id){
   };
   let hasExt=false;
   Object.entries(extFields).forEach(([elId,key])=>{
-    if(p[key]!=null){const el=document.getElementById(elId);if(el){el.value=p[key];hasExt=true;}}
+    if(p[key]!=null){
+      const el=document.getElementById(elId);
+      if(el){
+        el.value=p[key];
+        hasExt=true;
+        // Серый цвет для автополей, белый для введённых вручную
+        const isAuto=p._autoFields&&p._autoFields.includes(key);
+        el.style.color=isAuto?'var(--text2)':'var(--text)';
+        el.title=isAuto?'Заполнено автоматически (Claude)':'Введено вручную';
+        // Убираем пометку при ручном изменении
+        el.oninput=()=>{el.style.color='var(--text)';el.title='';};
+      }
+    }
   });
   if(hasExt){
     const exp=document.getElementById('pm-expanded');if(exp)exp.style.display='block';
     const icon=document.getElementById('pm-expand-icon');if(icon)icon.textContent='▾';
   }
-  if(p.notes){const n=document.getElementById('pm-notes');if(n)n.value=p.notes;}
-  subScreen('add-manual','Редактировать продукт','products');
+  // Помечаем автополя серым — включая основные
+  const allAutoFields=p._autoFields||[];
+  const basicFieldMap={'pm-kcal':'kcal','pm-prot':'prot','pm-fat':'fat','pm-carb':'carb',
+    'pm-fat-sat':'fatSat','pm-sugar':'sugar','pm-fiber':'fiber','pm-salt':'salt'};
+  Object.entries(basicFieldMap).forEach(([elId,key])=>{
+    const el=document.getElementById(elId);if(!el)return;
+    if(allAutoFields.includes(key)){
+      el.style.color='var(--text2)';el.title='Заполнено автоматически (Claude)';
+      el.oninput=()=>{el.style.color='var(--text)';el.title='';};
+    }else{el.style.color='var(--text)';el.title='';}
+  });
   // Меняем кнопку на "Сохранить изменения"
   setTimeout(()=>{
     const btn=document.querySelector('#scr-add-manual .bp');
@@ -1992,7 +2046,25 @@ async function generateWeekMenu(){
   show('menu');
   const g=S.settings;const today=new Date().toISOString().split('T')[0];
   const meals=getMeals();const mealCount=meals.length;
-  const prods=S.products.map(p=>`• ${p.name}: ${p.weight||'?'}г, до ${p.expiry||'?'}, ${p.kcal||0}ккал/100г, Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}`).join('\n');
+  const prods=S.products.map(p=>{
+    const base=`• ${p.name}: ${p.weight||'?'}г, до ${p.expiry||'?'}, ${p.kcal||0}ккал/100г, Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}`;
+    const extra=[];
+    if(p.fatSat!=null)extra.push(`нас.ж${p.fatSat}`);
+    if(p.fatMono!=null)extra.push(`моно${p.fatMono}`);
+    if(p.fatPoly!=null)extra.push(`поли${p.fatPoly}`);
+    if(p.fiber!=null)extra.push(`клетч${p.fiber}`);
+    if(p.sugar!=null)extra.push(`сахар${p.sugar}`);
+    if(p.salt!=null)extra.push(`соль${p.salt}`);
+    if(p.vitC!=null)extra.push(`витC${p.vitC}мг`);
+    if(p.vitD!=null)extra.push(`витD${p.vitD}мкг`);
+    if(p.vitB12!=null)extra.push(`B12_${p.vitB12}мкг`);
+    if(p.fe!=null)extra.push(`Fe${p.fe}мг`);
+    if(p.ca!=null)extra.push(`Ca${p.ca}мг`);
+    if(p.mg!=null)extra.push(`Mg${p.mg}мг`);
+    if(p.notes)extra.push(`состав: ${p.notes}`);
+    return base+(extra.length?`, ${extra.join(', ')}`:'')+
+      (!p._enriched&&!p.fatSat&&!p.fiber?' [нутриенты неполные]':'');
+  }).join('\n');
   const liked=S.dishes.filter(d=>d.liked).map(d=>d.name).join(', ')||'нет';
   const disliked=S.dishes.filter(d=>d.disliked).map(d=>d.name).join(', ')||'нет';
   const woDays=S.settings.workoutDays?.map(i=>DS[i]).join(', ')||'нет';
@@ -2372,26 +2444,18 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
   });
 
   // Для неизвестных — спрашиваем Claude и показываем пользователю для подтверждения
-  if(unknown.length>0){
-    const fridge=S.products.map(p=>p.name).join(', ');
-    const resp=await claude([{role:'user',content:`Сопоставь блюда из Yazio с продуктами в холодильнике.
+  if(unknown.length>0&&!dryRun){
+    addInfo(`${unknown.length} новых блюд без сопоставления → показываю форму`);
+    await showMappingConfirmation(unknown);
+    // После подтверждения — запускаем вычитание снова с новым маппингом
+    addInfo('Маппинг сохранён, применяю вычитание...');
+    await deductFromFridge(yazioData,[],false);
+    return;
+  }
 
-Блюда из Yazio: ${unknown.map(u=>u.normName).join(', ')}
-Продукты в холодильнике: ${fridge}
-
-Для каждого блюда укажи наиболее подходящий продукт из холодильника или null если не подходит ни один.
-ТОЛЬКО JSON: {"matches":[{"yazio":"название блюда","fridge":"название продукта или null","confidence":"high|medium|low"}]}`}],
-    'Только JSON.',500);
-
-    if(resp&&typeof resp==='string'){
-      try{
-        const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
-        const matches=data.matches||[];
-        // Показываем UI подтверждения
-        await showMappingConfirmation(unknown,matches);
-        return;// после подтверждения deductFromFridge вызовется повторно
-      }catch(e){}
-    }
+  if(dryRun&&unknown.length>0){
+    addInfo(`${unknown.length} блюд без сопоставления: ${unknown.map(u=>u.normName).join(', ')}`);
+    addInfo('Для добавления сопоставлений: синхронизируй данные (не тест)');
   }
 
   // Применяем известные сопоставления
@@ -2450,59 +2514,57 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
   }
 }
 
-async function showMappingConfirmation(unknown, matches){
+async function showMappingConfirmation(unknown){
   return new Promise(resolve=>{
-    // Создаём overlay с вопросами
     const overlay=document.createElement('div');
-    overlay.style.cssText='position:fixed;inset:0;background:rgba(26,26,46,0.97);z-index:100;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(26,26,46,0.97);z-index:100;overflow-y:auto;padding:16px;box-sizing:border-box';
 
     const fridge=S.products.map(p=>p.name);
+    const fridgeOpts=`<option value="">— не в моём холодильнике —</option>`+
+      fridge.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
 
-    let html=`<div style="font-size:15px;font-weight:600;margin-bottom:4px">Сопоставление продуктов Yazio</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Проверь и подтверди — это запомнится навсегда</div>`;
+    let html=`
+      <div style="font-size:15px;font-weight:600;margin-bottom:4px;padding-top:8px">Новые блюда из Yazio</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Укажи какому продукту в холодильнике соответствует каждое блюдо. Это запомнится навсегда — следующие вычитания будут автоматическими.</div>`;
 
-    matches.forEach((m,i)=>{
-      const conf=m.confidence==='high'?'✓':m.confidence==='medium'?'~':'?';
-      const confColor=m.confidence==='high'?'#4ade80':m.confidence==='medium'?'var(--acc2)':'var(--acc)';
-      html+=`<div style="background:var(--cs);border-radius:10px;padding:12px;border:0.5px solid var(--cb)">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Из Yazio:</div>
-        <div style="font-size:13px;font-weight:500;margin-bottom:8px">${esc(m.yazio)}</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Продукт в холодильнике <span style="color:${confColor}">${conf}</span>:</div>
-        <select id="map-${i}" style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:7px;font-size:13px">
-          <option value="">— не в холодильнике —</option>
-          ${fridge.map(name=>`<option value="${esc(name)}" ${name===m.fridge?'selected':''}>${esc(name)}</option>`).join('')}
+    unknown.forEach((u,i)=>{
+      html+=`<div style="background:var(--cs);border-radius:10px;padding:12px;border:0.5px solid var(--cb);margin-bottom:10px">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Блюдо из Yazio:</div>
+        <div style="font-size:14px;font-weight:500;margin-bottom:10px">${esc(u.normName)}</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Продукт в холодильнике:</div>
+        <select id="map-${i}" style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:8px;font-size:13px">
+          ${fridgeOpts}
         </select>
       </div>`;
     });
 
-    html+=`<button onclick="confirmYazioMapping(this)" style="background:var(--acc3);border:none;color:#000;padding:12px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px">✓ Сохранить и применить</button>
-    <button onclick="this.closest('div[style]').remove()" style="background:none;border:0.5px solid var(--cb);color:var(--text2);padding:10px;border-radius:10px;font-size:13px;cursor:pointer">Пропустить</button>`;
+    html+=`
+      <button id="mapSaveBtn" style="width:100%;background:#4ade80;border:none;color:#000;padding:13px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px">✓ Сохранить и применить вычитание</button>
+      <button onclick="this.closest('[data-overlay]').remove()" style="width:100%;background:none;border:0.5px solid var(--cb);color:var(--text2);padding:11px;border-radius:10px;font-size:13px;cursor:pointer;margin-top:8px">Пропустить</button>`;
 
     overlay.innerHTML=html;
-    // Сохраняем данные для обработки
-    overlay.dataset.matches=JSON.stringify(matches);
-    overlay.dataset.unknown=JSON.stringify(unknown);
+    overlay.dataset.overlay='1';
+
+    // Кнопка сохранения — ждём нажатия
+    overlay.querySelector('#mapSaveBtn').addEventListener('click',()=>{
+      if(!S.yazioMapping)S.yazioMapping={};
+      unknown.forEach((u,i)=>{
+        const sel=overlay.querySelector(`#map-${i}`);
+        S.yazioMapping[u.normName]=sel?.value||null;
+      });
+      save();
+      overlay.remove();
+      resolve();
+    });
+
+    // Пропустить — resolve без сохранения
+    overlay.querySelector('button:last-child').addEventListener('click',()=>{
+      overlay.remove();
+      resolve();
+    });
+
     document.body.appendChild(overlay);
-    resolve();
   });
-}
-
-function confirmYazioMapping(btn){
-  const overlay=btn.closest('div[style*="position:fixed"]');
-  if(!overlay)return;
-  const matches=JSON.parse(overlay.dataset.matches||'[]');
-  if(!S.yazioMapping)S.yazioMapping={};
-
-  matches.forEach((m,i)=>{
-    const sel=document.getElementById('map-'+i);
-    const normName=m.yazio;
-    S.yazioMapping[normName]=sel?.value||null;
-  });
-
-  save();
-  overlay.remove();
-  // Запускаем вычитание снова — теперь маппинг известен
-  if(S.yazioData)deductFromFridge(S.yazioData,Object.keys(S.yazioHistory||{}).slice(-2));
 }
 
 /* ── YAZIO DEEP ANALYSIS ── */
@@ -2969,32 +3031,45 @@ function readNutrition(prefix){
 }
 
 async function enrichProductData(prod){
-  // Поля которые могут быть заполнены пользователем — не перезаписываем
-  const userFields=['kcal','prot','fat','carb','fatSat','fatMono','fatPoly','fatTrans',
+  const allFields=['kcal','prot','fat','carb','fatSat','fatMono','fatPoly','fatTrans',
     'sugar','fiber','starch','polyols','salt','chol',
     'vitA','vitB1','vitB2','vitB6','vitB12','vitC','vitD','vitE','fe','ca','mg','zn'];
-  // Только поля которые реально пустые (null или undefined, но не 0)
-  const emptyFields=userFields.filter(k=>prod[k]==null);
+  const userFilled=new Set(prod._userFields||[]);
+  // Пустые = null И не заполнены пользователем явно
+  const emptyFields=allFields.filter(k=>prod[k]==null&&!userFilled.has(k));
   if(!emptyFields.length||!S.settings.apikey)return prod;
   try{
-    const known=userFields
-      .filter(k=>prod[k]!=null)
-      .map(k=>`${k}:${prod[k]}`).join(', ');
-    const resp=await claude([{role:'user',content:`Продукт: "${prod.name}".
-Известные данные на 100г: ${known||'только название'}.
+    const known=allFields.filter(k=>prod[k]!=null).map(k=>`${k}:${prod[k]}`).join(', ');
+    const compositionNote=prod.notes?`\nСостав/дополнительно: ${prod.notes}`:'';
+    const resp=await claude([{role:'user',content:`Продукт: "${prod.name}".${compositionNote}
+Известные данные на 100г: ${known||'нет'}.
 Заполни ТОЛЬКО эти недостающие поля: ${emptyFields.join(', ')}.
-Используй стандартные нутриентные таблицы. Ответь ТОЛЬКО JSON с указанными полями:`}],
+Используй состав продукта как приоритетный источник, затем стандартные нутриентные таблицы.
+Важно: если значение реально равно 0 (например клетчатка в яйце) — верни 0, не пропускай.
+Ответь ТОЛЬКО JSON с указанными полями:`}],
     'Ты нутрициолог. Только JSON без markdown.',600);
     if(resp&&typeof resp==='string'){
       const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
-      // Заполняем ТОЛЬКО пустые поля (null/undefined)
-      emptyFields.forEach(k=>{if(data[k]!=null)prod[k]=data[k];});
+      if(!prod._autoFields)prod._autoFields=[];
+      emptyFields.forEach(k=>{
+        if(data[k]!=null){
+          prod[k]=data[k];
+          if(!prod._autoFields.includes(k))prod._autoFields.push(k);
+        }
+      });
       prod._enriched=true;
     }
   }catch(e){}
-  // Иконка — всегда обновляем если дефолтная
   if(!prod.icon||prod.icon==='🥗')prod.icon=getProductIcon(prod.name);
   return prod;
+}
+
+function startPhotoCapture(){
+  // Сохраняем что уходим на камеру с экрана add-photo
+  // При возврате из камеры restoreScreen должен вернуть сюда
+  S._cameraReturn='add-photo';
+  save();
+  document.getElementById('photoInput').click();
 }
 
 function clearPForm(){
@@ -3087,22 +3162,72 @@ function saveSettings(silent){
   };
   save();if(!silent)alert('Сохранено');
 }
+
 function syncFridgeToHistory(){
   if(!S.products.length){alert('Холодильник пуст');return;}
   let added=0;
-  S.products.forEach(p=>{ 
+  S.products.forEach(p=>{
     const idx=(S.productHistory||[]).findIndex(x=>x.name.toLowerCase()===p.name.toLowerCase()||(p.barcode&&x.barcode===p.barcode));
-    if(idx>=0){
-      // Обновляем существующую запись полными данными
-      S.productHistory[idx]={...S.productHistory[idx],...p};
-    }else{
-      if(!S.productHistory)S.productHistory=[];
-      S.productHistory.push({...p});
-      added++;
-    }
+    if(idx>=0){S.productHistory[idx]={...S.productHistory[idx],...p};}
+    else{if(!S.productHistory)S.productHistory=[];S.productHistory.push({...p});added++;}
   });
   save();
   alert(`База синхронизирована с холодильником. Добавлено новых записей: ${added}.`);
+}
+
+async function verifyNutrientsByComposition(){
+  if(!S.settings.apikey){alert('Нужен API ключ');return;}
+  // Только продукты с составом в notes
+  const fieldsToCheck=['vitA','vitB1','vitB2','vitB6','vitB12','vitC','vitD','vitE',
+    'fe','ca','mg','zn','fatMono','fatPoly','fatTrans','starch','polyols','chol'];
+  const toVerify=S.products.filter(p=>p.notes&&p.notes.length>10);
+  if(!toVerify.length){
+    alert('Нет продуктов с составом в поле «Дополнительно»');return;
+  }
+  if(!confirm(`Проверить нутриенты для ${toVerify.length} продуктов с составом?\nОсновные поля (ккал/Б/Ж/У/насыщ.жиры/клетчатка/соль) не изменятся.\nЭто займёт ~${toVerify.length} запросов к Claude.`))return;
+
+  const btn=document.getElementById('btnVerifyNutrients');
+  let stopped=false;
+  btn.innerHTML='⏹ Остановить';
+  btn.onclick=()=>{stopped=true;};
+
+  let updated=0;
+  for(const prod of toVerify){
+    if(stopped)break;
+    btn.innerHTML=`⏹ Остановить (${updated}/${toVerify.length})`;
+    try{
+      const known=fieldsToCheck.filter(k=>prod[k]!=null).map(k=>`${k}:${prod[k]}`).join(', ');
+      const resp=await claude([{role:'user',content:`Продукт: "${prod.name}".
+Состав: ${prod.notes}
+Базовые нутриенты на 100г (НЕ МЕНЯТЬ): kcal:${prod.kcal}, prot:${prod.prot}, fat:${prod.fat}, carb:${prod.carb}, fatSat:${prod.fatSat??'?'}, fiber:${prod.fiber??'?'}, salt:${prod.salt??'?'}.
+Текущие доп. значения: ${known||'не заполнены'}.
+
+Проверь и скорректируй ТОЛЬКО эти поля исходя из состава: ${fieldsToCheck.join(', ')}.
+Если значение уже корректно — верни его же. Ответь ТОЛЬКО JSON:`}],
+      'Ты нутрициолог. Только JSON.',600);
+      if(resp&&typeof resp==='string'){
+        const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
+        let changed=false;
+        fieldsToCheck.forEach(k=>{
+          if(data[k]!=null&&data[k]!==prod[k]){
+            prod[k]=data[k];
+            // Убираем из _autoFields если значение скорректировано
+            if(!prod._autoFields)prod._autoFields=[];
+            if(!prod._autoFields.includes(k))prod._autoFields.push(k);
+            changed=true;
+          }
+        });
+        if(changed)updated++;
+        prod._verified=true;
+      }
+    }catch(e){}
+    // Небольшая пауза между запросами
+    await new Promise(r=>setTimeout(r,300));
+  }
+  save();
+  btn.innerHTML='🔬 Проверить нутриенты по составу';
+  btn.onclick=verifyNutrientsByComposition;
+  alert(`✓ Проверка завершена. Обновлено продуктов: ${updated} из ${toVerify.length}.${stopped?' (остановлено досрочно)':''}`);
 }
 
 function refreshAllIcons(){
@@ -3258,7 +3383,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.7.7';
+const APP_VERSION='1.8.4';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
@@ -3267,56 +3392,39 @@ document.getElementById('appVersion').textContent='v'+APP_VERSION;
 (function restoreScreen(){
   const sc=S.currentScreen;
   const mainTabs=['menu','products','dishes','gut','chat','tips','settings'];
-  // Для экранов добавления/редактирования — восстанавливаем только если есть черновик
-  const editScreens=['add-manual','add-photo','add-text','add-barcode','add-product'];
-  const hasDraft=S._formDraft&&(S._formDraft.name||S._formDraft.kcal||S._formDraft.weight);
 
-  let restoreName=null;
-  if(!sc||sc.isMain||mainTabs.includes(sc.name)){
-    restoreName=(sc&&sc.isMain)?sc.name:'menu';
-  }else if(editScreens.includes(sc.name)){
-    // Экран добавления/редактирования — восстанавливаем только с черновиком
-    if(hasDraft){
-      restoreName=sc.name;// восстановим как подэкран
-    }else{
-      restoreName=sc.prev||'products';// нет данных — возвращаем в продукты
-    }
-  }else{
-    restoreName=sc.name;// другие подэкраны (профиль yazio, настройки) — восстанавливаем
+  // Если вернулись из камеры — показываем экран добавления фото
+  if(S._cameraReturn){
+    const target=S._cameraReturn;
+    S._cameraReturn=null;save();
+    document.getElementById('backBtn').style.display='block';
+    document.getElementById('mainNav').style.display='none';
+    document.getElementById('refreshBtn').style.display='none';
+    document.getElementById('hTitle').textContent='Фото продукта';
+    S.prevScreen='add-product';
+    show(target);
+    return;
   }
 
-  const isMain=mainTabs.includes(restoreName)||!sc||sc.isMain||(editScreens.includes(sc.name)&&!hasDraft);
-
-  if(isMain){
+  const name=sc?sc.name:'menu';
+  if(!sc||sc.isMain||mainTabs.includes(name)){
+    const tab=mainTabs.includes(name)?name:'menu';
     document.getElementById('refreshBtn').style.display='flex';
-    const nb=document.getElementById('nav-'+restoreName);
+    const nb=document.getElementById('nav-'+tab);
     if(nb){document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));nb.classList.add('active');}
-    show(restoreName);
-    if(restoreName==='products')renderProducts();
-    else if(restoreName==='dishes')renderDishes();
-    else if(restoreName==='gut')renderGut();
-    else if(restoreName==='chat')renderChatHistory();
+    show(tab);
+    if(tab==='products')renderProducts();
+    else if(tab==='dishes')renderDishes();
+    else if(tab==='gut')renderGut();
+    else if(tab==='chat')renderChatHistory();
     else renderMenu();
   }else{
-    // Подэкран
     document.getElementById('backBtn').style.display='block';
     document.getElementById('mainNav').style.display='none';
     document.getElementById('refreshBtn').style.display='none';
     document.getElementById('hTitle').textContent=sc.title||'';
     S.prevScreen=sc.prev||'menu';
-    show(restoreName);
-    // Восстанавливаем данные формы
-    if(hasDraft&&(restoreName==='add-manual'||restoreName==='add-photo')){
-      const d=S._formDraft;
-      const pfx=restoreName==='add-manual'?'pm':'p';
-      const setVal=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
-      setVal(pfx+'-name',d.name);setVal(pfx+'-weight',d.weight);
-      setVal(pfx+'-expiry',d.expiry);setVal(pfx+'-kcal',d.kcal);
-      setVal(pfx+'-prot',d.prot);setVal(pfx+'-fat',d.fat);setVal(pfx+'-carb',d.carb);
-      setVal(pfx+'-barcode',d.barcode);setVal(pfx+'-notes',d.notes);
-      setVal(pfx+'-fat-sat',d.fatSat);setVal(pfx+'-sugar',d.sugar);
-      setVal(pfx+'-fiber',d.fiber);setVal(pfx+'-salt',d.salt);
-    }
+    show(name);
     renderMenu();
   }
 })();

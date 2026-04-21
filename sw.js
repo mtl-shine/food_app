@@ -1,4 +1,4 @@
-const VERSION = '1.7.7';
+const VERSION = '1.8.4';
 const CACHE = 'nutrition-' + VERSION;
 
 self.addEventListener('install', e => {
