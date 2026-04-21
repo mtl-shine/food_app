@@ -326,6 +326,7 @@ select option{background:#1a1a2e;color:var(--text)}
       <div id="yazioInfo"></div>
       <button class="bs" onclick="loadYazio()" style="margin-top:4px">↺ Загрузить данные Yazio</button>
       <button class="bs" onclick="testDeduction()" style="margin-top:4px;font-size:11px">🧪 Тест вычитания из холодильника</button>
+      <button class="bs" onclick="resetYazioMapping()" style="margin-top:4px;font-size:11px;color:var(--acc);border-color:rgba(233,69,96,0.3)">🗑 Сбросить таблицу сопоставлений Yazio</button>
       <button class="bs" onclick="startYazioDeepAnalysis()" style="margin-top:6px;border-color:rgba(129,140,248,0.4);color:#818cf8">🔬 Глубокий анализ истории (3 мес.)</button>
       <button class="bs" onclick="showYazioProfile()" id="btnShowProfile" style="display:none;margin-top:6px">👤 Просмотреть профиль питания</button>
     </div>
@@ -2372,18 +2373,23 @@ async function loadYazio(){
     save();
     const daysCount=fullDiary.length;
     if(el)el.innerHTML=`<div class="yz-ok">✓ Синхронизировано ${new Date(data.synced_at).toLocaleDateString('ru-RU')} · обновлено ${updatedDates.length} дн. · история ${daysCount} дн. · ср. ${S.yazioData.summary?.avg_kcal||0} ккал/день</div>`;
-
-    // Корректировка меню сегодня
-    await correctTodayByYazio(data);
     if(S.yazioProfile)document.getElementById('btnShowProfile').style.display='block';
   }catch(e){
     if(el)el.innerHTML=`<div class="nr">Не удалось загрузить. Проверь что yazio_sync.py запускался и данные верны.<br><small style="opacity:0.7">${url}</small></div>`;
     return;
   }
-  // Вычитаем из холодильника ПОСЛЕ try/catch — чтобы ошибки были видны
+  // Всё что ниже — вне try/catch, ошибки не скроют диагностику
+  try{await correctTodayByYazio(S.yazioData);}catch(e){}
   if(S.products.length>0){
     await deductFromFridge(S.yazioData, updatedDates);
   }
+}
+
+function resetYazioMapping(){
+  const count=Object.keys(S.yazioMapping||{}).length;
+  if(!confirm(`Сбросить таблицу сопоставлений (${count} записей)?\nПосле этого при следующей синхронизации Yazio снова покажет форму сопоставления.`))return;
+  S.yazioMapping={};S.yazioDeducted={};save();
+  alert('Таблица сопоставлений сброшена. Теперь запусти «Тест вычитания» или синхронизируй Yazio.');
 }
 
 async function testDeduction(){
@@ -2443,7 +2449,9 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
     }
   });
 
-  // Для неизвестных — спрашиваем Claude и показываем пользователю для подтверждения
+  addInfo(`маппинг: ${Object.keys(S.yazioMapping).length} записей, из них активных: ${Object.values(S.yazioMapping).filter(v=>v).length}`);
+  addInfo(`блюд сегодня/вчера: ${allDishes.length} уникальных → известных: ${known.length}, новых: ${unknown.length}`);
+
   if(unknown.length>0&&!dryRun){
     addInfo(`${unknown.length} новых блюд без сопоставления → показываю форму`);
     await showMappingConfirmation(unknown);
@@ -3383,7 +3391,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.8.4';
+const APP_VERSION='1.8.6';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
