@@ -324,6 +324,7 @@ select option{background:#1a1a2e;color:var(--text)}
         <div class="ig"><label class="il">Репозиторий</label><input type="text" id="s-ghrepo" placeholder="nutrition"></div>
       </div>
       <div id="yazioInfo"></div>
+      <div id="yazioDebug" style="font-size:11px;color:var(--text2);margin-top:4px"></div>
       <button class="bs" onclick="loadYazio()" style="margin-top:4px">↺ Загрузить данные Yazio</button>
       <button class="bs" onclick="testDeduction()" style="margin-top:4px;font-size:11px">🧪 Тест вычитания из холодильника</button>
       <button class="bs" onclick="resetYazioMapping()" style="margin-top:4px;font-size:11px;color:var(--acc);border-color:rgba(233,69,96,0.3)">🗑 Сбросить таблицу сопоставлений Yazio</button>
@@ -335,6 +336,7 @@ select option{background:#1a1a2e;color:var(--text)}
     <button class="bs" onclick="refreshAllIcons()">🎨 Обновить иконки продуктов</button>
     <button class="bs" onclick="syncFridgeToHistory()">🔄 Синхронизировать базу с холодильником</button>
     <button class="bs" onclick="verifyNutrientsByComposition()" id="btnVerifyNutrients">🔬 Проверить нутриенты по составу</button>
+    <button class="bs" onclick="exportDeductionTest()">🧪 Экспорт для теста вычитания</button>
     <button class="bs" onclick="exportData()">📤 Экспорт данных (резервная копия)</button>
     <button class="bs" onclick="document.getElementById('importFile').click()">📥 Импорт данных</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
@@ -2396,19 +2398,69 @@ function resetYazioMapping(){
   alert('Таблица сопоставлений сброшена. Теперь запусти «Тест вычитания» или синхронизируй Yazio.');
 }
 
+async function deductFromFridgeTest(testDate, dryRun){
+  if(!S.yazioData){alert('Нет данных Yazio — сначала загрузи');return;}
+
+  const today=new Date().toISOString().split('T')[0];
+  const yesterday=new Date(Date.now()-864e5).toISOString().split('T')[0];
+  const diary=S.yazioData.diary||[];
+
+  const todayDay=diary.find(d=>d.date===today);
+  const yesterdayDay=diary.find(d=>d.date===yesterday);
+
+  const relevantDays=diary.filter(d=>(d.date===today||d.date===yesterday)&&(d.dishes||[]).length>0);
+
+  const allDishes=[];
+  relevantDays.forEach(d=>(d.dishes||[]).forEach(dish=>{if(!allDishes.includes(dish))allDishes.push(dish);}));
+
+  const known=[];const unknown=[];
+  allDishes.forEach(dish=>{
+    const normName=dish.replace(/\s*—\s*[\d,.]+\s*(г|мл|g|ml)\s*$/i,'').trim();
+    if((S.yazioMapping||{}).hasOwnProperty(normName)){
+      if(S.yazioMapping[normName])known.push({dish,normName,target:S.yazioMapping[normName]});
+    }else unknown.push({dish,normName});
+  });
+
+  alert(`📊 Диагностика вычитания:
+
+products: ${S.products.length}
+diary дней: ${diary.length}
+
+сегодня (${today}): ${todayDay?(todayDay.dishes||[]).length+' блюд':'нет'}
+вчера (${yesterday}): ${yesterdayDay?(yesterdayDay.dishes||[]).length+' блюд':'нет'}
+
+relevantDays: ${relevantDays.length}
+allDishes: ${allDishes.length} уникальных
+known (в маппинге): ${known.length}
+unknown (нет маппинга): ${unknown.length}
+yazioMapping записей: ${Object.keys(S.yazioMapping||{}).length}
+yazioMapping активных: ${Object.values(S.yazioMapping||{}).filter(v=>v).length}
+
+${unknown.length>0?'Первые 3 несопоставленных:\n'+unknown.slice(0,3).map(u=>u.normName).join('\n'):''}`);
+}
+
 async function testDeduction(){
   if(!S.yazioData){alert('Сначала загрузи данные Yazio');return;}
   if(!S.products.length){alert('Холодильник пуст');return;}
+  // Сначала показываем диагностику
+  await deductFromFridgeTest();
+  // Потом запускаем реальный тест
   const el=document.getElementById('yazioInfo');
   if(el)el.innerHTML=`<div class="yz-ok">🧪 Тест (без изменений холодильника)...</div>`;
-  // dryRun=true — только диагностика, ничего не вычитает
+  const debugEl=document.getElementById('yazioDebug');
+  if(debugEl)debugEl.innerHTML='';
   await deductFromFridge(S.yazioData,[],true);
 }
 
 /* ── ВЫЧИТАНИЕ ИЗ ХОЛОДИЛЬНИКА ПО ФАКТУ YAZIO ── */
 async function deductFromFridge(yazioData, updatedDates, dryRun=false){
-  const el=document.getElementById('yazioInfo');
-  const addInfo=msg=>{if(el)el.innerHTML+=`<div style="font-size:11px;color:var(--text2);margin-top:3px">🔍 ${msg}</div>`;};
+  const debugEl=document.getElementById('yazioDebug');
+  if(debugEl)debugEl.innerHTML='';
+  const addInfo=msg=>{
+    const d=document.getElementById('yazioDebug');
+    if(d)d.innerHTML+=`<div>🔍 ${msg}</div>`;
+    console.log('deduct:',msg);
+  };
 
   if(!S.settings.apikey){addInfo('нет API ключа');return;}
   if(!S.products.length){addInfo('холодильник пуст');return;}
@@ -2516,10 +2568,10 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
 
   if(log.length){
     if(!dryRun)save();
-    const el=document.getElementById('yazioInfo');
-    if(el){
+    const d=document.getElementById('yazioDebug');
+    if(d){
       const icon=dryRun?'🧪':'📦';
-      el.innerHTML+=`<div class="na" style="margin-top:6px;font-size:11px">${icon} ${dryRun?'Тест — вычтено бы:':'Вычтено из холодильника:'}<br>${log.join('<br>')}</div>`;
+      d.innerHTML+=`<div style="margin-top:4px;padding:6px;background:rgba(74,222,128,0.1);border-radius:8px">${icon} ${dryRun?'Тест — вычтено бы:':'Вычтено из холодильника:'}<br>${log.join('<br>')}</div>`;
     }
   }else{
     addInfo('все блюда уже учтены или нет совпадений с граммовкой');
@@ -3259,6 +3311,29 @@ function refreshAllIcons(){
   else alert('Все иконки уже актуальны.');
 }
 
+function exportDeductionTest(){
+  const today=new Date().toISOString().split('T')[0];
+  const yesterday=new Date(Date.now()-864e5).toISOString().split('T')[0];
+  // Берём только нужное для теста вычитания
+  const yazioHistorySlim={};
+  if(S.yazioHistory){
+    [today,yesterday].forEach(d=>{if(S.yazioHistory[d])yazioHistorySlim[d]=S.yazioHistory[d];});
+  }
+  const data={
+    products:S.products,
+    yazioHistory:yazioHistorySlim,
+    yazioMapping:S.yazioMapping||{},
+    yazioDeducted:S.yazioDeducted||{},
+    settings:{apikey:S.settings?.apikey||''},
+  };
+  const json=JSON.stringify(data,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`deduction_test_${today}.json`;a.click();
+  URL.revokeObjectURL(url);
+}
+
 function exportData(){
   const data={
     exportedAt:new Date().toISOString(),
@@ -3395,7 +3470,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.8.7';
+const APP_VERSION='1.9.0';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
