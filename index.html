@@ -1783,6 +1783,7 @@ function editProduct(id){
       el.oninput=()=>{el.style.color='var(--text)';el.title='';};
     }else{el.style.color='var(--text)';el.title='';}
   });
+  subScreen('add-manual','Редактировать продукт','products');
   // Меняем кнопку на "Сохранить изменения"
   setTimeout(()=>{
     const btn=document.querySelector('#scr-add-manual .bp');
@@ -2570,14 +2571,17 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
         const deductFromThis=Math.min(toDeduct,prod.weight);
         if(!dryRun){
           prod.weight=Math.max(0,Math.round(prod.weight-deductFromThis));
-          // Если упаковка опустела — помечаем следующую как вскрытую
           if(prod.weight===0){
+            // Удаляем пустую упаковку
+            const idx=S.products.indexOf(prod);
+            if(idx>=0)S.products.splice(idx,1);
+            // Вскрываем следующую
             const nextPkg=packages.find(p=>p!==prod&&!p.opened&&p.weight>0);
             if(nextPkg)nextPkg.opened=true;
           }
         }
         const after=dryRun?Math.max(0,Math.round(before-deductFromThis)):prod.weight;
-        if(deductFromThis>0)log.push(`${prod.name}${prod.opened?' 📭':''}: ${before}г → ${after}г (−${deductFromThis}г)`);
+        if(deductFromThis>0)log.push(`${prod.name}${prod.opened?' 📭':''}: ${before}г → ${after===0?'удалено (пусто)':after+'г'} (−${deductFromThis}г)`);
         toDeduct-=deductFromThis;
       }
       if(!dryRun)S.yazioDeducted[d.date][normName]=totalGrams;
@@ -2585,7 +2589,7 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
   });
 
   if(log.length){
-    if(!dryRun)save();
+    if(!dryRun){save();renderProducts();}
     const d=document.getElementById('yazioDebug');
     if(d){
       const icon=dryRun?'🧪':'📦';
@@ -2598,14 +2602,19 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
 
 async function showMappingConfirmation(unknown){
   // Получаем предложения от Claude
-  const fridgeList=S.products.map(p=>`${p.name}${p.opened?' (вскрыта)':''} ${p.weight}г`).join(', ');
+  const fridgeList=S.products.map(p=>p.name).filter((v,i,a)=>a.indexOf(v)===i).join(', ');
   let suggestions={};
   try{
-    const resp=await claude([{role:'user',content:`Сопоставь блюда из Yazio с продуктами в холодильнике. Если нет подходящего — null.
-Блюда: ${unknown.map(u=>u.normName).join(', ')}
-Холодильник: ${fridgeList}
+    const resp=await claude([{role:'user',content:`Сопоставь блюда из Yazio с продуктами в холодильнике.
+Названия могут быть на разных языках (немецкий, русский, английский) — ищи смысловое совпадение.
+Примеры: "Haferflocken"="Овсяные хлопья", "Putenbrust"="Индейка", "Quark"="Творог", "Hähnchenbrust"="Куриная грудка".
+Если нет подходящего — null.
+
+Блюда из Yazio: ${unknown.map(u=>u.normName).join(' | ')}
+Продукты в холодильнике: ${fridgeList}
+
 ТОЛЬКО JSON: {"matches":{"блюдо":"точное название из холодильника или null"}}`}],
-    'Только JSON без markdown.',800);
+    'Только JSON без markdown.',1000);
     if(resp&&typeof resp==='string'){
       const d=JSON.parse(resp.replace(/```json|```/g,'').trim());
       suggestions=d.matches||{};
@@ -2616,8 +2625,8 @@ async function showMappingConfirmation(unknown){
     const overlay=document.createElement('div');
     overlay.style.cssText='position:fixed;inset:0;background:rgba(26,26,46,0.97);z-index:100;overflow-y:auto;padding:16px;box-sizing:border-box';
 
-    // Опции с пометкой вскрытых и количеством упаковок
-    const prodNames=[...new Set(S.products.map(p=>p.name))];
+    // Опции отсортированы по алфавиту
+    const prodNames=[...new Set(S.products.map(p=>p.name))].sort((a,b)=>a.localeCompare(b,'ru'));
     const fridgeOpts='<option value="">— не в моём холодильнике —</option>'+
       prodNames.map(name=>{
         const items=S.products.filter(p=>p.name===name);
@@ -3511,7 +3520,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.9.5';
+const APP_VERSION='1.9.7';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
