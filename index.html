@@ -186,6 +186,24 @@ select option{background:#1a1a2e;color:var(--text)}
 <!-- MENU -->
 <div class="scr active" id="scr-menu"><div class="si" id="menuContent"></div></div>
 
+<!-- AWAY PERIODS -->
+<div class="scr" id="scr-away">
+  <div class="si">
+    <div class="card">
+      <div class="sh"><span class="ct" style="margin:0">🏃 Приёмы пищи вне дома</span></div>
+      <div id="awayList" style="margin-bottom:12px"></div>
+      <div class="ct" style="font-size:13px;margin-bottom:8px">Добавить период</div>
+      <textarea id="awayInput" rows="3" placeholder="Например: &quot;29 мая ужин вне дома&quot;, &quot;с 30 мая по 3 июня отпуск&quot;, &quot;4 июня завтрак вне дома&quot;" style="width:100%;box-sizing:border-box;min-height:80px"></textarea>
+      <button class="bp" onclick="analyzeAwayPeriod()" style="margin-top:8px">Анализировать</button>
+      <div id="awayConfirm" style="display:none;margin-top:12px;background:var(--cs);border-radius:10px;padding:12px;border:0.5px solid rgba(129,140,248,0.4)">
+        <div id="awayConfirmText" style="font-size:13px;margin-bottom:12px"></div>
+        <button class="bp" onclick="confirmAwayPeriod()" style="margin-right:8px">✓ Верно</button>
+        <button class="bs" onclick="document.getElementById('awayConfirm').style.display='none'">✗ Исправить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- PRODUCTS -->
 <div class="scr" id="scr-products">
   <div class="si">
@@ -326,17 +344,15 @@ select option{background:#1a1a2e;color:var(--text)}
       <div id="yazioInfo"></div>
       <div id="yazioDebug" style="font-size:11px;color:var(--text2);margin-top:4px"></div>
       <button class="bs" onclick="loadYazio()" style="margin-top:4px">↺ Загрузить данные Yazio</button>
-      <button class="bs" onclick="testDeduction()" style="margin-top:4px;font-size:11px">🧪 Тест вычитания из холодильника</button>
-      <button class="bs" onclick="resetYazioMapping()" style="margin-top:4px;font-size:11px;color:var(--acc);border-color:rgba(233,69,96,0.3)">🗑 Сбросить таблицу сопоставлений Yazio</button>
+      <button class="bs" onclick="reviewYazioMapping(false)" style="margin-top:4px;font-size:11px">📋 Пересмотреть все сопоставления</button>
+      <button class="bs" onclick="reviewYazioMapping(true)" style="margin-top:4px;font-size:11px">❓ Пересмотреть отсутствующие продукты</button>
       <button class="bs" onclick="startYazioDeepAnalysis()" style="margin-top:6px;border-color:rgba(129,140,248,0.4);color:#818cf8">🔬 Глубокий анализ истории (3 мес.)</button>
       <button class="bs" onclick="showYazioProfile()" id="btnShowProfile" style="display:none;margin-top:6px">👤 Просмотреть профиль питания</button>
     </div>
     <button class="bp" onclick="saveSettings()">Сохранить</button>
     <button class="bs" onclick="generateWeekMenu()">↺ Пересоставить меню</button>
-    <button class="bs" onclick="refreshAllIcons()">🎨 Обновить иконки продуктов</button>
     <button class="bs" onclick="syncFridgeToHistory()">🔄 Синхронизировать базу с холодильником</button>
     <button class="bs" onclick="verifyNutrientsByComposition()" id="btnVerifyNutrients">🔬 Проверить нутриенты по составу</button>
-    <button class="bs" onclick="exportDeductionTest()">🧪 Экспорт для теста вычитания</button>
     <button class="bs" onclick="exportData()">📤 Экспорт данных (резервная копия)</button>
     <button class="bs" onclick="document.getElementById('importFile').click()">📥 Импорт данных</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
@@ -787,7 +803,7 @@ let S={
   gutLog:[],     // {id,date,meal,status:'ok'|'bad',note,time}
   gutPending:null, // {dayIdx,mealType} — ожидает оценки
   yazioData:null,
-  prevScreen:'menu',currentDayIdx:null,yazioDeducted:{}
+  prevScreen:'menu',currentDayIdx:null,yazioDeducted:{},awayPeriods:[]
 };
 
 function load(){try{const d=localStorage.getItem('np_v4');if(d)S=Object.assign(S,JSON.parse(d));}catch(e){}}
@@ -899,10 +915,10 @@ function subScreen(name,title,prev){
     S.currentScreen={name:parentTab,isMain:true};save();
   }
   show(name);
+  if(name==='away')renderAwayList();
 }
 
 function switchToSettings(){
-  // Настройки — как основная вкладка, не подэкран
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   document.getElementById('backBtn').style.display='none';
   document.getElementById('mainNav').style.display='flex';
@@ -1650,22 +1666,107 @@ function getMeals(){
 
 function isWorkoutDay(dayIdx){return(S.settings.workoutDays||[]).includes(dayIdx);}
 
-/* ── RENDER MENU ── */
+/* ── ПРИЁМЫ ПИЩИ ВНЕ ДОМА ── */
+function getAwayMealsForDate(dateStr){
+  const away=[];
+  (S.awayPeriods||[]).forEach(p=>{
+    if(dateStr<p.from||dateStr>p.to)return;
+    const meals=getMeals();
+    meals.forEach(meal=>{
+      if(dateStr===p.from){
+        const mealIdx=meals.indexOf(meal);
+        const fromIdx=Math.max(0,meals.indexOf(p.fromMeal));
+        if(mealIdx>=fromIdx)away.push(meal);
+      }else if(dateStr===p.to){
+        const mealIdx=meals.indexOf(meal);
+        const toIdx=p.toMeal?meals.indexOf(p.toMeal):meals.length-1;
+        if(mealIdx<=toIdx)away.push(meal);
+      }else away.push(meal);
+    });
+  });
+  return[...new Set(away)];
+}
+
+let pendingAwayPeriod=null;
+
+async function analyzeAwayPeriod(){
+  const text=document.getElementById('awayInput').value.trim();
+  if(!text){alert('Напиши описание');return;}
+  if(!S.settings.apikey){alert('Нужен API ключ');return;}
+  const btn=document.querySelector('#scr-away .bp');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Анализирую...';}
+  const today=new Date().toISOString().split('T')[0];
+  const meals=getMeals();
+  const resp=await claude([{role:'user',content:`Разбери описание периодов приёмов пищи вне дома. Сегодня ${today}.
+Приёмы пищи в день: ${meals.join(', ')}.
+Текст: "${text}"
+Верни ТОЛЬКО JSON:
+{"periods":[{"from":"YYYY-MM-DD","fromMeal":"первый_приём_вне_дома","to":"YYYY-MM-DD","toMeal":"последний_приём_вне_дома","note":"краткое описание"}],"confirmation":"Понял так: [человеческое описание на русском]. Правильно?"}`}],
+  'Только JSON.',600);
+  if(btn){btn.disabled=false;btn.innerHTML='Анализировать';}
+  if(!resp||typeof resp!=='string'){alert('Ошибка. Попробуй ещё раз.');return;}
+  try{
+    const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
+    pendingAwayPeriod=data.periods||[];
+    document.getElementById('awayConfirmText').textContent=data.confirmation||'Правильно понял?';
+    document.getElementById('awayConfirm').style.display='block';
+  }catch(e){alert('Не удалось разобрать. Переформулируй.');}
+}
+
+function confirmAwayPeriod(){
+  if(!pendingAwayPeriod)return;
+  if(!S.awayPeriods)S.awayPeriods=[];
+  S.awayPeriods.push(...pendingAwayPeriod);
+  save();pendingAwayPeriod=null;
+  document.getElementById('awayInput').value='';
+  document.getElementById('awayConfirm').style.display='none';
+  renderAwayList();renderMenu();
+}
+
+function renderAwayList(){
+  const el=document.getElementById('awayList');if(!el)return;
+  const periods=S.awayPeriods||[];
+  if(!periods.length){el.innerHTML='<p style="font-size:12px;color:var(--text2)">Нет запланированных периодов вне дома.</p>';return;}
+  const meals=getMeals();
+  el.innerHTML=periods.map((p,i)=>{
+    const fromStr=new Date(p.from+'T12:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'});
+    const toStr=new Date(p.to+'T12:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'});
+    const sameDay=p.from===p.to;
+    const label=sameDay?`${fromStr}: ${p.fromMeal||meals[0]}${p.fromMeal!==p.toMeal?' – '+p.toMeal:''}`
+      :`${fromStr} (${p.fromMeal||meals[0]}) → ${toStr} (${p.toMeal||meals[meals.length-1]})`;
+    return`<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--cs);border-radius:8px;margin-bottom:6px">
+      <span>🏃</span>
+      <div style="flex:1;font-size:13px"><b>${label}</b>${p.note?`<div style="font-size:11px;color:var(--text2)">${esc(p.note)}</div>`:''}</div>
+      <button onclick="removeAwayPeriod(${i})" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;padding:0 4px">×</button>
+    </div>`;
+  }).join('');
+}
+
+function removeAwayPeriod(i){
+  if(!S.awayPeriods)return;
+  S.awayPeriods.splice(i,1);save();renderAwayList();renderMenu();
+}
+
 function renderMenu(){
   const el=document.getElementById('menuContent');
-  // Проверяем нужно ли показать ЖКТ-pending
   checkGutPending();
   if(!S.menu){
-    el.innerHTML=`<div class="es"><div class="ei">📅</div><div class="ett">Меню не составлено</div><div class="es2">Добавь продукты в холодильник, затем нажми кнопку.</div><button class="bp" onclick="generateWeekMenu()">Составить меню на неделю</button></div>`;
+    el.innerHTML=`<div class="es"><div class="ei">📅</div><div class="ett">Меню не составлено</div><div class="es2">Добавь продукты в холодильник, затем нажми кнопку.</div><button class="bp" onclick="generateWeekMenu()">Составить меню на неделю</button><button class="bs" onclick="subScreen('away','Вне дома','menu')" style="margin-top:8px">🏃 Приёмы вне дома</button></div>`;
     return;
   }
   const days=weekDays();const meals=getMeals();
-  let html='';
+  // Кнопка "вне дома" в шапке
+  let html=`<div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+    <button onclick="subScreen('away','Вне дома','menu')" style="background:none;border:0.5px solid var(--cb);color:var(--text2);padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer">🏃 Вне дома</button>
+  </div>`;
   days.forEach((d,i)=>{
     const dm=S.menu[i]||{};const tod=isToday(d.date);const past=isPast(d.date)&&!tod;const wo=isWorkoutDay(i);
-    // ЖКТ за день
     const gutDay=S.gutLog.filter(g=>g.date===d.date.toISOString().split('T')[0]);
     const hasBad=gutDay.some(g=>g.status==='bad');
+    // Проверяем периоды вне дома
+    const dateStr=d.date.toISOString().split('T')[0];
+    const awayMeals=getAwayMealsForDate(dateStr);
+    const allAway=awayMeals.length>0&&meals.every(m=>awayMeals.includes(m));
     html+=`<div class="dc${tod?' today':''}${past?' past':''}${wo?' workout':''}" onclick="showDay(${i})">
       <div class="dh">
         <span class="dn">${d.short}${tod?', сегодня':''}</span>
@@ -1673,10 +1774,17 @@ function renderMenu(){
         <div style="display:flex;gap:4px">
           ${tod?'<span class="dbg dbg-today">сегодня</span>':''}
           ${wo?'<span class="dbg dbg-wo">💪 тренировка</span>':''}
+          ${allAway?'<span class="dbg" style="background:rgba(148,163,184,0.15);color:var(--text2)">🏃 вне дома</span>':''}
         </div>
       </div>
       <div>`;
-    meals.forEach(t=>{const m=dm[t];if(m)html+=`<div class="ml2"><span class="mt2">${t}</span><span>${esc(m.name)}</span></div>`;});
+    meals.forEach(t=>{
+      if(awayMeals.includes(t)){
+        html+=`<div class="ml2" style="opacity:0.5"><span class="mt2">${t}</span><span>🏃 вне дома</span></div>`;
+      }else{
+        const m=dm[t];if(m)html+=`<div class="ml2"><span class="mt2">${t}</span><span>${esc(m.name)}</span></div>`;
+      }
+    });
     if(dm.macros){const m=dm.macros;const g=S.settings;
       html+=`<div class="mr2">
         <div style="flex:1;text-align:center"><div class="mv">${m.kcal||0}</div><div class="mlb">ккал</div><div class="pb"><div class="pf" style="width:${Math.min(100,Math.round((m.kcal||0)/g.kcal*100))}%;background:var(--acc2)"></div></div></div>
@@ -2094,6 +2202,12 @@ async function generateWeekMenu(){
 - Альтернативы скучным продуктам: ${S.yazioProfile.alternatives||'нет данных'}
 - Зоны внимания: ${S.yazioProfile.concerns||'нет данных'}`
   :'';
+  // Формируем список периодов вне дома
+  const awayInfo=(S.awayPeriods||[]).length>0?
+    `\nПРИЁМЫ ВНЕ ДОМА (не планировать блюда для этих слотов, продукты не расходовать):\n`+
+    S.awayPeriods.map(p=>`${p.from} (с ${p.fromMeal}) по ${p.to} (по ${p.toMeal}): ${p.note||''}`).join('\n')
+    :'';
+
   const prompt=`Сегодня ${today}. Составь меню на текущую неделю (7 дней, 0=пн) из ТОЛЬКО имеющихся продуктов.
 Количество приёмов пищи в день: ${mealCount} (${meals.join(', ')}).
 
@@ -2109,7 +2223,7 @@ ${wishes||'нет'}
 ПОСТОЯННЫЕ ПОЖЕЛАНИЯ: ${g.prefs||'нет'}
 ${yazio}
 ${yazioProfile}
-
+${awayInfo}
 ТРЕНИРОВКИ: дни ${woDays}, примерное время ${woTime}
 В дни тренировок:
 - За 2-3 часа до тренировки: больше сложных углеводов (предтрен)
@@ -2209,42 +2323,104 @@ async function sendChat(){
   msgs.appendChild(loading);msgs.scrollTop=msgs.scrollHeight;
   if(!S.settings.apikey){loading.textContent='Укажи API ключ в настройках.';loading.classList.remove('loading');return;}
   S.chatHistory.push({role:'user',content:text});
+
+  // ── ХОЛОДИЛЬНИК ──
   const prods=S.products.map(p=>{
-    const parts=[`${p.name}`];
+    const parts=[p.name];
     if(p.weight)parts.push(`${p.weight}г`);
     if(p.expiry)parts.push(`до ${p.expiry}`);
+    if(p.opened)parts.push('📭вскрыта');
     if(p.kcal)parts.push(`${p.kcal}ккал`);
     if(p.prot||p.fat||p.carb)parts.push(`Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}`);
-    if(p.fatSat)parts.push(`нас.ж${p.fatSat}`);
-    if(p.fiber)parts.push(`клетч${p.fiber}`);
-    if(p.salt)parts.push(`соль${p.salt}`);
-    if(p.notes)parts.push(`(${p.notes})`);
+    if(p.fatSat!=null)parts.push(`нас.ж${p.fatSat}`);
+    if(p.fiber!=null)parts.push(`клетч${p.fiber}`);
+    if(p.salt!=null)parts.push(`соль${p.salt}`);
+    if(p.vitC!=null)parts.push(`витC${p.vitC}`);
+    if(p.fe!=null)parts.push(`Fe${p.fe}`);
+    if(p.ca!=null)parts.push(`Ca${p.ca}`);
+    if(p.notes)parts.push(`[${p.notes}]`);
     return parts.join(' | ');
-  }).join('\n');
+  }).join('\n')||'пусто';
+
+  // ── YAZIO: сегодня и последние 7 дней ──
+  const today=new Date().toISOString().split('T')[0];
+  const week7=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-i);return d.toISOString().split('T')[0];});
+  const yazioWeek=(S.yazioHistory?week7.map(date=>{
+    const d=S.yazioHistory[date];if(!d)return null;
+    const dishes=(d.dishes||[]).slice(0,8).join(', ');
+    return`${date}: ${d.kcal||0}ккал Б${d.prot||0}/Ж${d.fat||0}/У${d.carb||0}${dishes?' | '+dishes:''}`;
+  }).filter(Boolean).join('\n'):'нет данных')||'нет данных';
+
+  // ── ТЕКУЩЕЕ МЕНЮ ──
+  const menuCtx=S.menu?weekDays().map((d,i)=>{
+    const dm=S.menu[i]||{};const meals=getMeals();
+    const dayMeals=meals.map(t=>dm[t]?`${t}: ${dm[t].name}`:null).filter(Boolean).join(', ');
+    return dayMeals?`${d.short} ${d.str}: ${dayMeals}`:null;
+  }).filter(Boolean).join('\n'):'не составлено';
+
+  // ── ЖКТ за последние 14 дней ──
+  const gutLog14=S.gutLog.filter(g=>{
+    const d=new Date(g.date||g.time||0);
+    return(Date.now()-d.getTime())<14*864e5;
+  }).map(g=>`${g.date||''} ${g.meal||''}: ${g.status==='bad'?'❌':'✓'}${g.note?' '+g.note:''}`).join('\n')||'нет записей';
+
+  // ── ПРОФИЛЬ ПИТАНИЯ ──
+  const profileCtx=S.yazioProfile?
+    `Средние за 3 мес: ${S.yazioProfile.avg_kcal||0}ккал, Б${S.yazioProfile.avg_prot||0}/Ж${S.yazioProfile.avg_fat||0}/У${S.yazioProfile.avg_carb||0}. ${S.yazioProfile.patterns||''}`
+    :'нет данных';
+
+  // ── БЛЮДА ──
   const liked=S.dishes.filter(d=>d.liked).map(d=>d.name).join(', ')||'нет';
-  const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-5).map(g=>g.note).filter(Boolean).join(', ')||'нет';
+  const disliked=S.dishes.filter(d=>d.liked===false).map(d=>d.name).join(', ')||'нет';
+
+  // ── ПЕРИОДЫ ВНЕ ДОМА ──
+  const awayCtx=(S.awayPeriods||[]).length>0?
+    S.awayPeriods.map(p=>`${p.from}–${p.to}: ${p.note||'вне дома'}`).join(', '):'нет';
+
+  const g=S.settings;
   const resp=await claude(S.chatHistory,
-    `Ты персональный ассистент по питанию и кулинарии. Говори по-русски, дружелюбно.
-Контекст пользователя:
-ХОЛОДИЛЬНИК (полные данные):
-${prods||'пусто'}
+    `Ты персональный диетолог-консультант. Говори по-русски, дружелюбно, конкретно.
+У тебя полный доступ ко всем данным пользователя о питании.
 
-- Цели: ${S.settings.kcal}ккал/день, Б${S.settings.prot}/Ж${S.settings.fat}/У${S.settings.carb}г
-- Любимые блюда: ${liked}
-- Проблемы с ЖКТ: ${gutBad}
-- Тренировки: ${(S.settings.workoutDays||[]).map(i=>['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i]).join(', ')||'нет'}
+━━━ ХОЛОДИЛЬНИК ━━━
+${prods}
 
-Ты можешь помочь с чем угодно: рецепт, замена ингредиента, нутриенты, что приготовить, советы, пожелания к дням меню, психологическая сторона питания. Отвечай вдумчиво и без осуждения.
+━━━ ПИТАНИЕ ЗА ПОСЛЕДНИЕ 7 ДНЕЙ (из Yazio) ━━━
+${yazioWeek}
 
-ВАЖНО про добавление продуктов в холодильник:
-- Если просят добавить продукт N раз — добавь N записей с одинаковыми данными
-- Если просят скопировать продукт из холодильника — возьми ВСЕ его данные из списка выше и используй их
-- Если данные продукта известны из холодильника — используй их полностью (kcal, prot, fat, carb, fatSat, fiber, salt и т.д.)
-- В конце ответа добавь блок с продуктами для добавления:
+━━━ ТЕКУЩЕЕ МЕНЮ ━━━
+${menuCtx}
+
+━━━ ЖКТ-ДНЕВНИК (последние 14 дней) ━━━
+${gutLog14}
+
+━━━ ЦЕЛИ ━━━
+${g.kcal}ккал/день | Б${g.prot}г | Ж${g.fat}г | У${g.carb}г | клетчатка ${g.fiber||30}г
+Тренировки: ${(g.workoutDays||[]).map(i=>['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i]).join(', ')||'нет'} в ~${g.workoutTime||'18:00'}
+
+━━━ ПРЕДПОЧТЕНИЯ ━━━
+Любимые блюда: ${liked}
+Стоп-лист: ${disliked}
+Постоянные пожелания: ${g.prefs||'нет'}
+
+━━━ ПРОФИЛЬ ПИТАНИЯ (3 мес.) ━━━
+${profileCtx}
+
+━━━ ПЕРИОДЫ ВНЕ ДОМА ━━━
+${awayCtx}
+
+Ты можешь:
+- Рекомендовать что съесть прямо сейчас исходя из уже съеденного сегодня
+- Анализировать причины проблем с ЖКТ по рациону
+- Предлагать рецепты из того что есть в холодильнике
+- Оценивать нутриентный баланс дня/недели
+- Обсуждать психологическую сторону питания
+- Добавлять продукты в холодильник
+
+Если добавляешь продукты — добавь в конце:
 <ADD_PRODUCTS>
-[{"name":"Название","weight":число,"kcal":число,"prot":число,"fat":число,"carb":число,"fatSat":число_или_null,"fiber":число_или_null,"salt":число_или_null,"notes":"текст_или_null"}]
-</ADD_PRODUCTS>
-Если добавлять ничего не нужно — не добавляй этот блок.`,1200);
+[{"name":"Название","weight":число,"kcal":число,"prot":число,"fat":число,"carb":число}]
+</ADD_PRODUCTS>`,1500);
   if(resp&&typeof resp==='string'){
     // Проверяем есть ли команда добавления продуктов
     const addMatch=resp.match(/<ADD_PRODUCTS>([\s\S]*?)<\/ADD_PRODUCTS>/);
@@ -2397,6 +2573,77 @@ async function loadYazio(){
   }else{
     if(elInfo)elInfo.innerHTML+=`<div style="font-size:11px;color:var(--acc2);margin-top:3px">⚠ Холодильник пуст — вычитание пропущено</div>`;
   }
+}
+
+function reviewYazioMapping(nullOnly=false){
+  if(!S.yazioMapping||!Object.keys(S.yazioMapping).length){
+    alert('Таблица сопоставлений пуста. Сначала загрузи данные Yazio.');return;
+  }
+  const entries=Object.entries(S.yazioMapping);
+  const filtered=nullOnly?entries.filter(([,v])=>!v):entries;
+  if(!filtered.length){
+    alert(nullOnly?'Нет записей с пустыми сопоставлениями.':'Таблица пуста.');return;
+  }
+
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(26,26,46,0.97);z-index:100;overflow-y:auto;padding:16px;box-sizing:border-box';
+
+  const prodNames=[...new Set(S.products.map(p=>p.name))].sort((a,b)=>a.localeCompare(b,'ru'));
+  const fridgeOpts='<option value="">— не в моём холодильнике —</option>'+
+    prodNames.map(name=>{
+      const items=S.products.filter(p=>p.name===name);
+      const openedCount=items.filter(p=>p.opened).length;
+      const totalWeight=items.reduce((s,p)=>s+p.weight,0);
+      return`<option value="${esc(name)}">${esc(name)} (${totalWeight}г${openedCount?`, 📭${openedCount}`:''})`;
+    }).join('');
+
+  let html=`
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px;padding-top:8px">
+      ${nullOnly?'❓ Отсутствующие продукты':'📋 Все сопоставления'} (${filtered.length})
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
+      ${nullOnly?'Блюда отмеченные как «не в холодильнике» — возможно теперь они есть.':'Все текущие сопоставления — можно исправить любое.'}
+    </div>
+    <input type="text" placeholder="🔍 Поиск..." oninput="filterMappingItems(this.value)"
+      style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:8px;font-size:13px;box-sizing:border-box;margin-bottom:10px">
+    <div id="mappingItems">`;
+
+  filtered.forEach(([yaziоName, fridgeName],i)=>{
+    const opts=fridgeName?
+      fridgeOpts.replace(`value="${esc(fridgeName)}"`,`value="${esc(fridgeName)}" selected`):
+      fridgeOpts;
+    const hasMatch=!!fridgeName;
+    html+=`<div class="mapping-item" data-name="${esc(yaziоName.toLowerCase())}"
+      style="background:var(--cs);border-radius:10px;padding:10px;border:0.5px solid ${hasMatch?'rgba(74,222,128,0.3)':'rgba(233,69,96,0.3)'};margin-bottom:8px">
+      <div style="font-size:11px;color:var(--text2)">Из Yazio:</div>
+      <div style="font-size:13px;font-weight:500;margin:2px 0 6px">${esc(yaziоName)}</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Сейчас: <b>${hasMatch?esc(fridgeName):'не в холодильнике'}</b></div>
+      <select id="review-${i}" style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:7px;font-size:12px">${opts}</select>
+      <input type="hidden" id="review-key-${i}" value="${esc(yaziоName)}">
+    </div>`;
+  });
+
+  html+=`</div>
+    <button id="reviewSaveBtn" style="width:100%;background:#4ade80;border:none;color:#000;padding:13px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px">✓ Сохранить изменения</button>
+    <button id="reviewCloseBtn" style="width:100%;background:none;border:0.5px solid var(--cb);color:var(--text2);padding:11px;border-radius:10px;font-size:13px;cursor:pointer;margin-top:8px">Закрыть</button>`;
+
+  overlay.innerHTML=html;
+  overlay.dataset.overlay='1';
+  overlay.dataset.count=filtered.length;
+
+  overlay.querySelector('#reviewSaveBtn').addEventListener('click',()=>{
+    if(!S.yazioMapping)S.yazioMapping={};
+    for(let i=0;i<filtered.length;i++){
+      const key=overlay.querySelector(`#review-key-${i}`)?.value;
+      const val=overlay.querySelector(`#review-${i}`)?.value||null;
+      if(key)S.yazioMapping[key]=val||null;
+    }
+    save();
+    overlay.remove();
+    alert('✓ Сопоставления обновлены');
+  });
+  overlay.querySelector('#reviewCloseBtn').addEventListener('click',()=>overlay.remove());
+  document.body.appendChild(overlay);
 }
 
 function resetYazioMapping(){
@@ -3400,6 +3647,7 @@ function exportData(){
     yazioProfile:S.yazioProfile,
     yazioMapping:S.yazioMapping,
     yazioDeducted:S.yazioDeducted,
+    awayPeriods:S.awayPeriods||[],
     settings:S.settings,
   };
   const json=JSON.stringify(data,null,2);
@@ -3520,7 +3768,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='1.9.7';
+const APP_VERSION='2.0.1';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
