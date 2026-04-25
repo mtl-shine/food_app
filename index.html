@@ -640,6 +640,7 @@ select option{background:#1a1a2e;color:var(--text)}
           <button onclick="scanBarcodeForManual()" style="background:none;border:0.5px solid var(--cb);border-radius:9px;padding:0 12px;color:var(--text2);cursor:pointer;font-size:13px;white-space:nowrap">📷 Скан</button>
         </div>
       </div>
+      <div class="ig"><label class="il">Количество упаковок</label><input type="number" id="pm-qty" placeholder="1" min="1" max="99" value="1"></div>
       <div class="ig"><label class="il">Дополнительно (состав, ГИ, аминокислоты и др.)</label>
         <textarea id="pm-notes" placeholder="Например: ГИ 55, содержит пробиотики, источник омега-3..." style="min-height:55px"></textarea>
       </div>
@@ -812,7 +813,6 @@ function save(){try{localStorage.setItem('np_v4',JSON.stringify(S));}catch(e){}}
 function addToHistory(p){
   if(!S.productHistory)S.productHistory=[];
   const idx=S.productHistory.findIndex(x=>x.name.toLowerCase()===p.name.toLowerCase()||(p.barcode&&x.barcode===p.barcode));
-  // Сохраняем полный профиль нутриентов
   const entry={
     name:p.name,icon:p.icon||getProductIcon(p.name),barcode:p.barcode||null,
     kcal:p.kcal,prot:p.prot,fat:p.fat,carb:p.carb,
@@ -823,11 +823,23 @@ function addToHistory(p){
     vitC:p.vitC,vitD:p.vitD,vitE:p.vitE,
     fe:p.fe,ca:p.ca,mg:p.mg,zn:p.zn,
     notes:p.notes,
+    // Стандартный вес — только от невскрытых упаковок
+    ...(p.weight&&!p.opened?{defaultWeight:p.weight}:{}),
+    // Дни после вскрытия — запоминаем навсегда
+    ...(p.afterOpenDays?{afterOpenDays:p.afterOpenDays}:{}),
   };
-  // Убираем null/undefined чтобы не засорять историю
   Object.keys(entry).forEach(k=>{if(entry[k]==null)delete entry[k];});
   if(idx>=0)S.productHistory[idx]={...S.productHistory[idx],...entry};
   else S.productHistory.push(entry);
+
+  // Распространяем afterOpenDays на все одинаковые продукты в холодильнике
+  if(p.afterOpenDays){
+    S.products.forEach(pr=>{
+      if(pr.name.toLowerCase()===p.name.toLowerCase()&&!pr.afterOpenDays){
+        pr.afterOpenDays=p.afterOpenDays;
+      }
+    });
+  }
 }
 
 /* ── API ── */
@@ -1044,7 +1056,10 @@ function showAddMethod(method){
     subScreen('add-barcode','Штрихкод / База','add-product');
   }else{
     editingProductId=null;
-    clearManualForm();subScreen('add-manual','Добавить вручную','add-product');
+    clearManualForm();
+    const qtyEl=document.getElementById('pm-qty');
+    if(qtyEl){qtyEl.closest('.ig').style.display='';}
+    subScreen('add-manual','Добавить вручную','add-product');
   }
 }
 
@@ -1253,8 +1268,12 @@ function fillManualFormFromProduct(p, similar){
   clearManualForm();
   if(p.name)document.getElementById('pm-name').value=p.name;
   if(p.barcode)document.getElementById('pm-barcode').value=p.barcode;
-  // Устанавливаем иконку по названию если дефолтная
   if(p.name)p.icon=getProductIcon(p.name);
+  // Подставляем defaultWeight если упаковка невскрытая
+  const weightToUse=p.defaultWeight||p.weight;
+  if(weightToUse)document.getElementById('pm-weight').value=weightToUse;
+  // afterOpenDays — подставляем из истории
+  if(p.afterOpenDays)document.getElementById('pm-afteropen').value=p.afterOpenDays;
   // Числовые поля — заполняем если не null (включая 0)
   const numFields={'pm-kcal':'kcal','pm-prot':'prot','pm-fat':'fat','pm-carb':'carb'};
   Object.entries(numFields).forEach(([id,key])=>{
@@ -1441,8 +1460,8 @@ async function addProductManual(){
     }else expiry=openedExpiry(expiry,name);
   }
   const barcode=document.getElementById('pm-barcode')?.value.trim()||null;
+  const qty=Math.max(1,Math.min(99,parseInt(document.getElementById('pm-qty')?.value)||1));
   const nutrition=readNutrition('pm');
-  // Записываем какие поля заполнил пользователь явно
   const allFields=['kcal','prot','fat','carb','fatSat','fatMono','fatPoly','fatTrans',
     'sugar','fiber','starch','polyols','salt','chol',
     'vitA','vitB1','vitB2','vitB6','vitB12','vitC','vitD','vitE','fe','ca','mg','zn'];
@@ -1462,7 +1481,10 @@ async function addProductManual(){
   }catch(e){}finally{
     if(btn){btn.disabled=false;btn.innerHTML=editingProductId?'Сохранить изменения':'Добавить в холодильник';}
   }
-  S.products.push(prod);
+  // Добавляем N упаковок
+  for(let i=0;i<qty;i++){
+    S.products.push({...prod,id:Date.now()+Math.random()});
+  }
   addToHistory(prod);
   S._formDraft=null;save();clearManualForm();
   subScreen('add-product','Добавить продукт','products');
@@ -1475,6 +1497,7 @@ function clearManualForm(){
    'pm-fe','pm-ca','pm-mg','pm-zn','pm-notes'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
+  const qty=document.getElementById('pm-qty');if(qty)qty.value='1';
   const cb=document.getElementById('pm-opened');if(cb)cb.checked=false;
   const exp=document.getElementById('pm-expanded');if(exp)exp.style.display='none';
   const icon=document.getElementById('pm-expand-icon');if(icon)icon.textContent='▸';
@@ -1531,7 +1554,7 @@ ${text}
     let added=0;
     for(const p of list){
       if(!p.name)continue;
-      if(S.products.find(x=>x.name.toLowerCase()===p.name.toLowerCase()))continue;
+      if(!p.name)continue;
       const prod={
         id:Date.now()+Math.random(),
         ...p,
@@ -1816,7 +1839,8 @@ function renderProducts(){
       <div class="pico" onclick="editProduct(${p.id})" style="cursor:pointer" title="Редактировать">${p.icon||'🥗'}</div>
       <div class="pinf" onclick="editProduct(${p.id})" style="cursor:pointer">
         <div class="pnm">${esc(p.name)}</div>
-        <div class="pmt">${p.weight?p.weight+'г · ':''}${p.kcal?p.kcal+' ккал/100г':''}</div>
+        <div class="pmt">${p.weight?p.weight+'г · ':''}${p.kcal?p.kcal+' ккал/100г':''}${p.afterOpenDays?' · после вскр.'+p.afterOpenDays+'д':''}</div>
+        ${p.notes?`<div style="font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${esc(p.notes)}</div>`:''}
       </div>
       <div style="text-align:right;flex-shrink:0;margin-right:3px">
         <div class="e${st}" style="font-size:11px">${fmtExp(p.expiry)}</div>
@@ -1892,6 +1916,9 @@ function editProduct(id){
     }else{el.style.color='var(--text)';el.title='';}
   });
   subScreen('add-manual','Редактировать продукт','products');
+  // Скрываем поле количества при редактировании
+  const qtyEl=document.getElementById('pm-qty');
+  if(qtyEl){qtyEl.closest('.ig').style.display='none';}
   // Меняем кнопку на "Сохранить изменения"
   setTimeout(()=>{
     const btn=document.querySelector('#scr-add-manual .bp');
@@ -3211,31 +3238,33 @@ let photoQueue=[];
 // Сжимаем фото до нужного размера через Canvas
 async function compressImage(file, maxWidth=1024, quality=0.80){
   return new Promise(resolve=>{
-    const reader=new FileReader();
-    reader.onload=e=>{
-      const img=new Image();
-      img.onload=()=>{
-        try{
-          let w=img.width, h=img.height;
-          if(w>maxWidth){h=Math.round(h*maxWidth/w);w=maxWidth;}
-          // Дополнительное сжатие если файл больше 3МБ
-          if(file.size>3*1024*1024&&w>800){h=Math.round(h*800/w);w=800;quality=0.75;}
-          const canvas=document.createElement('canvas');
-          canvas.width=w;canvas.height=h;
-          canvas.getContext('2d').drawImage(img,0,0,w,h);
-          const b64=canvas.toDataURL('image/jpeg',quality).split(',')[1];
-          canvas.width=1;canvas.height=1; // освобождаем память
-          resolve({b64,mediaType:'image/jpeg'});
-        }catch(err){
-          // Fallback без canvas — читаем напрямую
-          resolve({b64:e.target.result.split(',')[1],mediaType:file.type});
-        }
-      };
-      img.onerror=()=>resolve({b64:e.target.result.split(',')[1],mediaType:file.type});
-      img.src=e.target.result;
+    // Для очень больших файлов — агрессивнее сжимаем
+    if(file.size>5*1024*1024){maxWidth=800;quality=0.70;}
+    else if(file.size>3*1024*1024){maxWidth=900;quality=0.75;}
+
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      try{
+        let w=img.width,h=img.height;
+        if(w>maxWidth){h=Math.round(h*maxWidth/w);w=maxWidth;}
+        const canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        const b64=canvas.toDataURL('image/jpeg',quality).split(',')[1];
+        canvas.width=1;canvas.height=1;
+        resolve({b64,mediaType:'image/jpeg'});
+      }catch(err){
+        // Fallback через FileReader
+        const reader=new FileReader();
+        reader.onload=e=>resolve({b64:e.target.result.split(',')[1],mediaType:file.type});
+        reader.onerror=()=>resolve(null);
+        reader.readAsDataURL(file);
+      }
     };
-    reader.onerror=()=>resolve(null);
-    reader.readAsDataURL(file);
+    img.onerror=()=>{URL.revokeObjectURL(url);resolve(null);};
+    img.src=url;
   });
 }
 
@@ -3768,7 +3797,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.0.1';
+const APP_VERSION='2.0.3';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
