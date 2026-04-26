@@ -2712,34 +2712,41 @@ function restoreDeducted(){
   if(!S.yazioDeducted||!Object.keys(S.yazioDeducted).length){
     alert('Нет данных о вычтенных продуктах.');return;
   }
-  // Показываем что было вычтено
   const lines=[];
   Object.entries(S.yazioDeducted).forEach(([date,items])=>{
     Object.entries(items).forEach(([normName,grams])=>{
       const mapping=S.yazioMapping?.[normName];
-      if(mapping)lines.push(`${date}: ${mapping} +${grams}г (блюдо: ${normName})`);
+      if(mapping)lines.push(`${date}: ${mapping} +${grams}г`);
     });
   });
   if(!lines.length){alert('Нет активных вычитаний для возврата.');return;}
   if(!confirm(`Вернуть в холодильник:\n${lines.join('\n')}\n\nПродолжить?`))return;
 
-  // Возвращаем граммы
   let restored=0;
+  const logLines=[];
   Object.entries(S.yazioDeducted).forEach(([date,items])=>{
     Object.entries(items).forEach(([normName,grams])=>{
       const mapping=S.yazioMapping?.[normName];
       if(!mapping)return;
-      // Находим вскрытую упаковку или любую с этим именем
       const prod=S.products.filter(p=>p.name===mapping).sort((a,b)=>(b.opened?1:0)-(a.opened?1:0))[0];
-      if(prod){prod.weight=Math.round(prod.weight+grams);restored++;}
+      if(prod){
+        const before=prod.weight;
+        prod.weight=Math.round(prod.weight+grams);
+        logLines.push(`${prod.name}: ${before}г → ${prod.weight}г (+${grams}г)`);
+        restored++;
+      }
     });
   });
-  // Очищаем yazioDeducted
   S.yazioDeducted={};
-  // Сбрасываем lastYazioSyncedAt чтобы следующая загрузка снова запустила вычитание
   S.lastYazioSyncedAt=null;
   save();renderProducts();
-  alert(`✓ Возвращено ${restored} продуктов. История вычитания сброшена.\nТеперь можно снова загрузить данные Yazio — вычитание произойдёт корректно.`);
+
+  // Показываем лог в yazioDebug
+  const d=document.getElementById('yazioDebug');
+  if(d){
+    d.innerHTML=`<div style="margin-top:4px;padding:6px;background:rgba(251,191,36,0.1);border-radius:8px;font-size:11px">↩ Возвращено в холодильник:<br>${logLines.join('<br>')}</div>`;
+  }
+  alert(`✓ Возвращено ${restored} продуктов. При следующей загрузке Yazio вычитание произойдёт заново.`);
 }
 
 function resetYazioMapping(){
@@ -3888,7 +3895,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.0.7';
+const APP_VERSION='2.0.8';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
