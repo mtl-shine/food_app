@@ -2,7 +2,7 @@
   "name": "Моё питание",
   "short_name": "Питание",
   "description": "Персональный планировщик питания",
-  "version": "2.0.8",
+  "version": "2.0.9",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#1a1a2e",
