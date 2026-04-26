@@ -916,15 +916,11 @@ function subScreen(name,title,prev){
   document.getElementById('refreshBtn').style.display='none';
   document.getElementById('hTitle').textContent=title;
   history.pushState({screen:name,title,prev:S.prevScreen},'',location.href.split('#')[0]+'#'+name);
-  // Экраны добавления/редактирования не сохраняем как currentScreen —
-  // при перезапуске лучше вернуться на родительскую вкладку
-  const noSaveScreens=['add-manual','add-photo','add-text','add-barcode','add-product','add-dish'];
-  if(!noSaveScreens.includes(name)){
+  // Экраны редактирования — currentScreen обновляется только при скрытии (visibilitychange)
+  // Основные подэкраны (настройки, профиль) — сохраняем сразу
+  const editScreens=['add-manual','add-photo','add-text','add-barcode','add-product','add-dish'];
+  if(!editScreens.includes(name)){
     S.currentScreen={name,title,prev:S.prevScreen,isMain:false};save();
-  }else{
-    // Сохраняем родительскую вкладку как текущий экран
-    const parentTab=['products','menu','dishes','gut','settings'].includes(S.prevScreen)?S.prevScreen:'products';
-    S.currentScreen={name:parentTab,isMain:true};save();
   }
   show(name);
   if(name==='away')renderAwayList();
@@ -3425,8 +3421,8 @@ async function enrichProductData(prod){
     'sugar','fiber','starch','polyols','salt','chol',
     'vitA','vitB1','vitB2','vitB6','vitB12','vitC','vitD','vitE','fe','ca','mg','zn'];
   const userFilled=new Set(prod._userFields||[]);
-  // Пустые = null И не заполнены пользователем явно
   const emptyFields=allFields.filter(k=>prod[k]==null&&!userFilled.has(k));
+  console.log('enrichProductData:',prod.name,'emptyFields:',emptyFields.length,'apikey:',!!S.settings.apikey,'userFilled:',[...userFilled]);
   if(!emptyFields.length||!S.settings.apikey)return prod;
   try{
     const known=allFields.filter(k=>prod[k]!=null).map(k=>`${k}:${prod[k]}`).join(', ');
@@ -3797,7 +3793,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.0.3';
+const APP_VERSION='2.0.4';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
@@ -3806,8 +3802,9 @@ document.getElementById('appVersion').textContent='v'+APP_VERSION;
 (function restoreScreen(){
   const sc=S.currentScreen;
   const mainTabs=['menu','products','dishes','gut','chat','tips','settings'];
+  const editScreens=['add-manual','add-photo','add-text','add-barcode','add-product'];
 
-  // Если вернулись из камеры — показываем экран добавления фото
+  // Если вернулись из камеры — показываем фото-экран
   if(S._cameraReturn){
     const target=S._cameraReturn;
     S._cameraReturn=null;save();
@@ -3821,6 +3818,7 @@ document.getElementById('appVersion').textContent='v'+APP_VERSION;
   }
 
   const name=sc?sc.name:'menu';
+
   if(!sc||sc.isMain||mainTabs.includes(name)){
     const tab=mainTabs.includes(name)?name:'menu';
     document.getElementById('refreshBtn').style.display='flex';
@@ -3832,13 +3830,37 @@ document.getElementById('appVersion').textContent='v'+APP_VERSION;
     else if(tab==='gut')renderGut();
     else if(tab==='chat')renderChatHistory();
     else renderMenu();
+  }else if(editScreens.includes(name)){
+    // Восстанавливаем экран редактирования
+    document.getElementById('backBtn').style.display='block';
+    document.getElementById('mainNav').style.display='none';
+    document.getElementById('refreshBtn').style.display='none';
+    document.getElementById('hTitle').textContent=sc.title||'Добавить продукт';
+    S.prevScreen=sc.prev||'products';
+    show(name);
+    // Восстанавливаем черновик формы
+    if(S._formDraft&&(name==='add-manual'||name==='add-photo')){
+      const d=S._formDraft;
+      const pfx=name==='add-manual'?'pm':'p';
+      const setVal=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
+      setVal(pfx+'-name',d.name);setVal(pfx+'-weight',d.weight);
+      setVal(pfx+'-expiry',d.expiry);setVal(pfx+'-kcal',d.kcal);
+      setVal(pfx+'-prot',d.prot);setVal(pfx+'-fat',d.fat);setVal(pfx+'-carb',d.carb);
+      setVal(pfx+'-barcode',d.barcode);setVal(pfx+'-notes',d.notes);
+      setVal(pfx+'-fat-sat',d.fatSat);setVal(pfx+'-sugar',d.sugar);
+      setVal(pfx+'-fiber',d.fiber);setVal(pfx+'-salt',d.salt);
+      setVal(pfx+'-afteropen',d.afterOpenDays);
+    }
+    renderMenu();
   }else{
+    // Другие подэкраны
     document.getElementById('backBtn').style.display='block';
     document.getElementById('mainNav').style.display='none';
     document.getElementById('refreshBtn').style.display='none';
     document.getElementById('hTitle').textContent=sc.title||'';
     S.prevScreen=sc.prev||'menu';
     show(name);
+    if(name==='away')renderAwayList();
     renderMenu();
   }
 })();
@@ -3859,6 +3881,25 @@ document.addEventListener('input',e=>{
   };
   save();
 },{passive:true});
+
+// Сохраняем текущий экран при скрытии приложения (свёртывание, переключение)
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    // Определяем реальный текущий экран
+    const activeScr=document.querySelector('.scr.active');
+    const scrId=activeScr?.id?.replace('scr-','');
+    if(!scrId)return;
+    const editScreens=['add-manual','add-photo','add-text','add-barcode'];
+    const mainTabs=['menu','products','dishes','gut','chat','tips','settings'];
+    if(editScreens.includes(scrId)){
+      // Сохраняем экран редактирования + черновик формы
+      S.currentScreen={name:scrId,title:document.getElementById('hTitle')?.textContent||'',prev:S.prevScreen,isMain:false};
+    }else if(mainTabs.includes(scrId)){
+      S.currentScreen={name:scrId,isMain:true};
+    }
+    save();
+  }
+});
 
 if('serviceWorker'in navigator){window.addEventListener('load',()=>{
   navigator.serviceWorker.register('./sw.js').then(reg=>{
