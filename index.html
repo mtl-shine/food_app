@@ -344,6 +344,7 @@ select option{background:#1a1a2e;color:var(--text)}
       <div id="yazioInfo"></div>
       <div id="yazioDebug" style="font-size:11px;color:var(--text2);margin-top:4px"></div>
       <button class="bs" onclick="loadYazio()" style="margin-top:4px">↺ Загрузить данные Yazio</button>
+      <button class="bs" onclick="restoreDeducted()" style="margin-top:4px;color:var(--acc2);border-color:rgba(251,191,36,0.4)">↩ Вернуть вычтенное из Yazio</button>
       <button class="bs" onclick="reviewYazioMapping(false)" style="margin-top:4px;font-size:11px">📋 Пересмотреть все сопоставления</button>
       <button class="bs" onclick="reviewYazioMapping(true)" style="margin-top:4px;font-size:11px">❓ Пересмотреть отсутствующие продукты</button>
       <button class="bs" onclick="startYazioDeepAnalysis()" style="margin-top:6px;border-color:rgba(129,140,248,0.4);color:#818cf8">🔬 Глубокий анализ истории (3 мес.)</button>
@@ -352,6 +353,7 @@ select option{background:#1a1a2e;color:var(--text)}
     <button class="bp" onclick="saveSettings()">Сохранить</button>
     <button class="bs" onclick="generateWeekMenu()">↺ Пересоставить меню</button>
     <button class="bs" onclick="syncFridgeToHistory()">🔄 Синхронизировать базу с холодильником</button>
+    <button class="bs" onclick="mergeDuplicates()">🔗 Объединить дублирующиеся продукты</button>
     <button class="bs" onclick="verifyNutrientsByComposition()" id="btnVerifyNutrients">🔬 Проверить нутриенты по составу</button>
     <button class="bs" onclick="exportData()">📤 Экспорт данных (резервная копия)</button>
     <button class="bs" onclick="document.getElementById('importFile').click()">📥 Импорт данных</button>
@@ -1529,6 +1531,9 @@ async function importFromText(){
 
   const today=new Date().toISOString().split('T')[0];
   const resp=await claude([{role:'user',content:`Разбери список продуктов и верни JSON. Сегодня ${today}.
+Названия могут быть на русском, немецком или английском языках — принимай все.
+Единицы измерения: г, g, мл, ml, кг, kg, л, l, шт — принимай все варианты.
+Если несколько слов на разных языках описывают одно и то же — это один продукт.
 Для каждого продукта заполни ВСЕ поля нутриентов на 100г из базы знаний (если пользователь не указал — используй стандартные значения):
 - name: название
 - weight: вес в граммах (штуки → вес: яйцо ~60г, помидор ~150г, огурец ~200г)
@@ -1546,7 +1551,7 @@ async function importFromText(){
 ${text}
 
 Ответь ТОЛЬКО JSON: {"products":[{"name":"...","weight":0,"expiry":"YYYY-MM-DD","kcal":0,"prot":0,"fat":0,"carb":0,"fatSat":0,"fatMono":0,"fatPoly":0,"sugar":0,"fiber":0,"salt":0,"vitC":0,"vitD":0,"vitB12":0,"fe":0,"ca":0,"mg":0,"opened":false,"icon":"🥗"}]}`}],
-  'Ты разбираешь список продуктов. Только JSON без markdown.',2000);
+  'Ты разбираешь список продуктов. Только JSON без markdown.',4000);
 
   btn.disabled=false;btn.innerHTML='Добавить всё в холодильник';
 
@@ -1554,29 +1559,47 @@ ${text}
     status.innerHTML=`<div class="nr">Ошибка: ${resp?.error||'нет ответа'}</div>`;return;
   }
   try{
-    const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
-    const list=data.products||[];
-    let added=0;
+    // Более надёжный парсинг — ищем JSON внутри ответа
+    let raw=resp.replace(/```json|```/g,'').trim();
+    // Если ответ начинается не с { — ищем первый {
+    const jsonStart=raw.indexOf('{');
+    const jsonEnd=raw.lastIndexOf('}');
+    if(jsonStart>0)raw=raw.slice(jsonStart,jsonEnd+1);
+    const data=JSON.parse(raw);
+    // products может быть на разных уровнях
+    const list=data.products||data.items||data.list||(Array.isArray(data)?data:[]);
+    if(!list.length){
+      status.innerHTML=`<div class="nr">Claude не вернул продуктов. Попробуй переформулировать список.</div>`;return;
+    }
+    let added=0;let merged=0;
     for(const p of list){
       if(!p.name)continue;
-      if(!p.name)continue;
-      const prod={
-        id:Date.now()+Math.random(),
-        ...p,
-        icon:p.icon&&p.icon!=='🥗'?p.icon:getProductIcon(p.name),
-        expiry:parseExp(p.expiry)||p.expiry||null,
-      };
-      // Удаляем null/undefined поля
-      Object.keys(prod).forEach(k=>{if(prod[k]==null)delete prod[k];});
-      S.products.push(prod);
-      addToHistory(prod);
-      added++;
+      // Ищем существующий продукт с таким же именем
+      const existing=S.products.find(x=>x.name.toLowerCase()===p.name.toLowerCase());
+      if(existing&&p.weight){
+        // Суммируем вес к существующему продукту
+        existing.weight=Math.round((existing.weight||0)+(p.weight||0));
+        merged++;
+      }else{
+        const prod={
+          id:Date.now()+Math.random(),
+          ...p,
+          icon:p.icon&&p.icon!=='🥗'?p.icon:getProductIcon(p.name),
+          expiry:parseExp(p.expiry)||p.expiry||null,
+        };
+        Object.keys(prod).forEach(k=>{if(prod[k]==null)delete prod[k];});
+        S.products.push(prod);
+        addToHistory(prod);
+        added++;
+      }
     }
     save();
-    status.innerHTML=`<div class="ng">✓ Добавлено ${added} продуктов</div>`;
-    setTimeout(()=>{S.prevScreen='products';goBack();},1200);
+    const msg=merged>0?`✓ Добавлено ${added}, добавлен вес к ${merged} существующим`:`✓ Добавлено ${added} продуктов`;
+    status.innerHTML=`<div class="ng">${msg}</div>`;
+    setTimeout(()=>{S.prevScreen='products';goBack();},1500);
   }catch(e){
-    status.innerHTML=`<div class="nr">Ошибка разбора. Попробуй ещё раз.</div>`;
+    console.error('importFromText error:',e,resp);
+    status.innerHTML=`<div class="nr">Ошибка разбора: ${e.message}. <br><small>Открой консоль (F12) для деталей.</small></div>`;
   }
 }
 function showAddDish(){clearDForm();subScreen('add-dish','Добавить блюдо','dishes');}
@@ -2552,6 +2575,12 @@ async function loadYazio(){
     if(!r.ok)throw new Error('Файл не найден');
     const data=await r.json();
 
+    // Проверяем не загружали ли уже этот файл
+    if(data.synced_at&&S.lastYazioSyncedAt===data.synced_at){
+      if(el)el.innerHTML=`<div class="yz-ok">✓ Данные уже загружены (${new Date(data.synced_at).toLocaleDateString('ru-RU')} ${new Date(data.synced_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}). Вычитание не повторяется.</div>`;
+      return;
+    }
+
     if(!S.yazioHistory)S.yazioHistory={};
     const newDays=data.diary||[];
     newDays.forEach(day=>{
@@ -2592,6 +2621,7 @@ async function loadYazio(){
     const daysCount=fullDiary.length;
     if(el)el.innerHTML=`<div class="yz-ok">✓ Синхронизировано ${new Date(data.synced_at).toLocaleDateString('ru-RU')} · обновлено ${updatedDates.length} дн. · история ${daysCount} дн. · ср. ${S.yazioData.summary?.avg_kcal||0} ккал/день</div>`;
     if(S.yazioProfile)document.getElementById('btnShowProfile').style.display='block';
+    S.lastYazioSyncedAt=data.synced_at;
   }catch(e){
     if(el)el.innerHTML=`<div class="nr">Не удалось загрузить. Проверь что yazio_sync.py запускался и данные верны.<br><small style="opacity:0.7">${url}</small></div>`;
     return;
@@ -2676,6 +2706,40 @@ function reviewYazioMapping(nullOnly=false){
   });
   overlay.querySelector('#reviewCloseBtn').addEventListener('click',()=>overlay.remove());
   document.body.appendChild(overlay);
+}
+
+function restoreDeducted(){
+  if(!S.yazioDeducted||!Object.keys(S.yazioDeducted).length){
+    alert('Нет данных о вычтенных продуктах.');return;
+  }
+  // Показываем что было вычтено
+  const lines=[];
+  Object.entries(S.yazioDeducted).forEach(([date,items])=>{
+    Object.entries(items).forEach(([normName,grams])=>{
+      const mapping=S.yazioMapping?.[normName];
+      if(mapping)lines.push(`${date}: ${mapping} +${grams}г (блюдо: ${normName})`);
+    });
+  });
+  if(!lines.length){alert('Нет активных вычитаний для возврата.');return;}
+  if(!confirm(`Вернуть в холодильник:\n${lines.join('\n')}\n\nПродолжить?`))return;
+
+  // Возвращаем граммы
+  let restored=0;
+  Object.entries(S.yazioDeducted).forEach(([date,items])=>{
+    Object.entries(items).forEach(([normName,grams])=>{
+      const mapping=S.yazioMapping?.[normName];
+      if(!mapping)return;
+      // Находим вскрытую упаковку или любую с этим именем
+      const prod=S.products.filter(p=>p.name===mapping).sort((a,b)=>(b.opened?1:0)-(a.opened?1:0))[0];
+      if(prod){prod.weight=Math.round(prod.weight+grams);restored++;}
+    });
+  });
+  // Очищаем yazioDeducted
+  S.yazioDeducted={};
+  // Сбрасываем lastYazioSyncedAt чтобы следующая загрузка снова запустила вычитание
+  S.lastYazioSyncedAt=null;
+  save();renderProducts();
+  alert(`✓ Возвращено ${restored} продуктов. История вычитания сброшена.\nТеперь можно снова загрузить данные Yazio — вычитание произойдёт корректно.`);
 }
 
 function resetYazioMapping(){
@@ -3558,6 +3622,28 @@ function saveSettings(silent){
   save();if(!silent)alert('Сохранено');
 }
 
+function mergeDuplicates(){
+  const groups={};
+  S.products.forEach(p=>{
+    const key=p.name.toLowerCase();
+    if(!groups[key])groups[key]=[];
+    groups[key].push(p);
+  });
+  const dupes=Object.values(groups).filter(g=>g.length>1&&g.every(p=>!p.opened));
+  if(!dupes.length){alert('Нет одинаковых невскрытых продуктов для объединения.');return;}
+  const lines=dupes.map(g=>`${g[0].name}: ${g.length} упаковки → ${g.reduce((s,p)=>s+p.weight,0)}г`);
+  if(!confirm(`Объединить в одну запись:\n${lines.join('\n')}\n\n(Только невскрытые одинаковые продукты)`))return;
+  dupes.forEach(g=>{
+    const total=g.reduce((s,p)=>s+p.weight,0);
+    // Оставляем первую запись с суммарным весом
+    g[0].weight=total;
+    // Удаляем остальные
+    g.slice(1).forEach(p=>{S.products=S.products.filter(x=>x.id!==p.id);});
+  });
+  save();renderProducts();
+  alert(`✓ Объединено ${dupes.length} групп продуктов`);
+}
+
 function syncFridgeToHistory(){
   if(!S.products.length){alert('Холодильник пуст');return;}
   let added=0;
@@ -3802,7 +3888,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.0.5';
+const APP_VERSION='2.0.7';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
