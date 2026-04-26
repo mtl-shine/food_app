@@ -2733,7 +2733,14 @@ async function restoreDeducted(){
     });
   });
 
-  if(!toRestore.length){alert('Нет продуктов для возврата по текущему маппингу.');return;}
+  if(!toRestore.length){
+    // Диагностика
+    const mappingTargets=[...new Set(Object.values(S.yazioMapping||{}).filter(v=>v))];
+    const fridgeNames=S.products.map(p=>p.name);
+    const notFound=mappingTargets.filter(t=>!fridgeNames.some(n=>n===t));
+    alert(`Нет продуктов для возврата.\n\nМаппинг ищет: ${mappingTargets.slice(0,5).join(', ')}\nВ холодильнике: ${fridgeNames.slice(0,5).join(', ')}\nНе найдено: ${notFound.join(', ')||'все найдены'}`);
+    return;
+  }
   if(!confirm(`Прибавить к холодильнику:\n${toRestore.map(r=>`${r.prod.name} +${r.grams}г`).join('\n')}\n\nПродолжить?`))return;
 
   const logLines=[];
@@ -2743,12 +2750,14 @@ async function restoreDeducted(){
     logLines.push(`${prod.name}: ${before}г → ${prod.weight}г (+${grams}г)`);
   });
   S.yazioDeducted={};
-  S.lastYazioSyncedAt=null;
-  save();renderProducts();
+  S._skipNextDeduction=true;// предотвращаем повторное вычитание при автозагрузке
+  save();
+  await new Promise(r=>setTimeout(r,100));
+  renderProducts();
 
   const d=document.getElementById('yazioDebug');
   if(d)d.innerHTML=`<div style="margin-top:4px;padding:6px;background:rgba(251,191,36,0.1);border-radius:8px;font-size:11px">↩ Возвращено:<br>${logLines.join('<br>')}</div>`;
-  alert(`✓ Прибавлено ${logLines.length} продуктов. При следующей загрузке Yazio вычитание произойдёт заново.`);
+  alert(`✓ Прибавлено ${logLines.length} продуктов. Когда будешь готова к новой синхронизации — нажми "↺ Загрузить данные Yazio".`);
 }
 
 function resetYazioMapping(){
@@ -2814,6 +2823,13 @@ async function testDeduction(){
 
 /* ── ВЫЧИТАНИЕ ИЗ ХОЛОДИЛЬНИКА ПО ФАКТУ YAZIO ── */
 async function deductFromFridge(yazioData, updatedDates, dryRun=false){
+  // Если флаг пропуска установлен — не вычитаем (после restoreDeducted)
+  if(!dryRun&&S._skipNextDeduction){
+    S._skipNextDeduction=false;save();
+    const d=document.getElementById('yazioDebug');
+    if(d)d.innerHTML+='<div>⏭ Вычитание пропущено (после возврата)</div>';
+    return;
+  }
   const debugEl=document.getElementById('yazioDebug');
   if(debugEl)debugEl.innerHTML='';
   const addInfo=msg=>{
@@ -3902,7 +3918,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.0.9';
+const APP_VERSION='2.1.1';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
