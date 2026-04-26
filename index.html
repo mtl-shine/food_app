@@ -1261,7 +1261,16 @@ async function handleBarcode(code){
 
 // Заполняем ручную форму данными продукта и переходим на неё
 function fillManualFormFromProduct(p, similar){
+  editingProductId=null;// сбрасываем — добавляем новый, не редактируем
   clearManualForm();
+  // Показываем поле количества
+  const qtyEl=document.getElementById('pm-qty');
+  if(qtyEl){qtyEl.closest('.ig').style.display='';}
+  // Восстанавливаем кнопку
+  setTimeout(()=>{
+    const btn=document.querySelector('#scr-add-manual .bp');
+    if(btn){btn.textContent='Добавить в холодильник';btn.onclick=addProductManual;}
+  },50);
   if(p.name)document.getElementById('pm-name').value=p.name;
   if(p.barcode)document.getElementById('pm-barcode').value=p.barcode;
   if(p.name)p.icon=getProductIcon(p.name);
@@ -3793,7 +3802,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.0.4';
+const APP_VERSION='2.0.5';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
