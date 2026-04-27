@@ -1868,7 +1868,7 @@ function renderProducts(){
       <div class="pinf" onclick="editProduct(${p.id})" style="cursor:pointer">
         <div class="pnm">${esc(p.name)}</div>
         <div class="pmt">${p.weight?p.weight+'г · ':''}${p.kcal?p.kcal+' ккал/100г':''}${p.afterOpenDays?' · после вскр.'+p.afterOpenDays+'д':''}</div>
-        ${p.notes?`<div style="font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${esc(p.notes)}</div>`:''}
+        ${p.notes?`<div style="font-size:10px;color:var(--text2);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(p.notes)}</div>`:''}
       </div>
       <div style="text-align:right;flex-shrink:0;margin-right:3px">
         <div class="e${st}" style="font-size:11px">${fmtExp(p.expiry)}</div>
@@ -1944,6 +1944,9 @@ function editProduct(id){
     }else{el.style.color='var(--text)';el.title='';}
   });
   subScreen('add-manual','Редактировать продукт','products');
+  // Заметки
+  const notesEl=document.getElementById('pm-notes');
+  if(notesEl)notesEl.value=p.notes||'';
   // Скрываем поле количества при редактировании
   const qtyEl=document.getElementById('pm-qty');
   if(qtyEl){qtyEl.closest('.ig').style.display='none';}
@@ -2718,8 +2721,8 @@ async function restoreDeducted(){
   const relevantDays=diary.filter(d=>(d.date===today||d.date===yesterday)&&(d.dishes||[]).length>0);
   if(!relevantDays.length){alert('Нет данных за сегодня/вчера.');return;}
 
-  // Собираем что нужно вернуть
-  const toRestore=[];
+  // Суммируем граммы по продукту (один продукт может встречаться несколько раз за день)
+  const restoreMap={};// prodId -> {prod, grams}
   relevantDays.forEach(d=>{
     (d.dishes||[]).forEach(dish=>{
       const normName=dish.replace(/\s*—\s*[\d,.]+\s*(г|мл|g|ml)\s*$/i,'').trim();
@@ -2729,9 +2732,15 @@ async function restoreDeducted(){
       const target=S.yazioMapping[normName];
       if(!target)return;
       const prod=S.products.filter(p=>p.name===target).sort((a,b)=>(b.opened?1:0)-(a.opened?1:0))[0];
-      if(prod)toRestore.push({prod,grams});
+      if(!prod)return;
+      if(restoreMap[prod.id]){
+        restoreMap[prod.id].grams+=grams;
+      }else{
+        restoreMap[prod.id]={prod,grams};
+      }
     });
   });
+  const toRestore=Object.values(restoreMap);
 
   if(!toRestore.length){
     // Диагностика
@@ -3918,7 +3927,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.1.1';
+const APP_VERSION='2.1.4';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
