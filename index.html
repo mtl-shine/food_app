@@ -940,7 +940,6 @@ function switchToSettings(){
   // Если есть ожидающий маппинг — показываем форму
   if(S._pendingMapping?.length){
     const pending=S._pendingMapping;
-    S._pendingMapping=null;save();
     setTimeout(async()=>{
       await showMappingConfirmation(pending);
       if(S.yazioData)await deductFromFridge(S.yazioData,[],false);
@@ -3108,6 +3107,7 @@ async function showMappingConfirmation(unknown){
         const sel=overlay.querySelector(`#map-${i}`);
         S.yazioMapping[u.normName]=sel?.value||null;
       });
+      S._pendingMapping=null;// очищаем после успешного сохранения
       save();overlay.remove();resolve();
     });
     overlay.querySelector('#mapSkipBtn').addEventListener('click',()=>{overlay.remove();resolve();});
@@ -3992,7 +3992,7 @@ function initSettingsUI(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.2.1';
+const APP_VERSION='2.2.2';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
