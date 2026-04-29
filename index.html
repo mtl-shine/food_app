@@ -2809,6 +2809,16 @@ async function restoreDeducted(){
   alert(`✓ Прибавлено ${logLines.length} продуктов. Когда будешь готова к новой синхронизации — нажми "↺ Загрузить данные Yazio".`);
 }
 
+async function showPendingMapping(){
+  if(!S._pendingMapping?.length)return;
+  const pending=S._pendingMapping;
+  S._pendingMapping=null;save();
+  const d=document.getElementById('yazioDebug');
+  if(d)d.innerHTML='';
+  await showMappingConfirmation(pending);
+  if(S.yazioData)await deductFromFridge(S.yazioData,[],false);
+}
+
 function resetYazioMapping(){
   const count=Object.keys(S.yazioMapping||{}).length;
   if(!confirm(`Сбросить таблицу сопоставлений (${count} записей)?\nПосле этого при следующей синхронизации Yazio снова покажет форму сопоставления.`))return;
@@ -3968,17 +3978,21 @@ function initSettingsUI(){
   if(mc)mc.classList.add('sel');
   initWorkoutGrid();
   // Yazio info — показываем только если yazioInfo пустой
-  // (не перезаписываем диагностику от loadYazio)
   if(S.yazioData){
     const el=document.getElementById('yazioInfo');
     if(el&&!el.innerHTML.trim()){
       el.innerHTML=`<div class="yz-ok">✓ Данные загружены: ${new Date(S.yazioData.synced_at).toLocaleDateString('ru-RU')} · ${S.yazioData.frequent_dishes?.length||0} блюд</div>`;
     }
+    // Показываем уведомление о pending маппинге
+    if(S._pendingMapping?.length){
+      const el=document.getElementById('yazioDebug');
+      if(el)el.innerHTML=`<div style="padding:8px;background:rgba(251,191,36,0.15);border:0.5px solid rgba(251,191,36,0.4);border-radius:8px;font-size:12px;cursor:pointer" onclick="showPendingMapping()">⚠ ${S._pendingMapping.length} блюд без сопоставления — нажми чтобы сопоставить и вычесть из холодильника</div>`;
+    }
   }
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.2.0';
+const APP_VERSION='2.2.1';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
