@@ -169,7 +169,7 @@ select option{background:#1a1a2e;color:var(--text)}
   <h1 id="hTitle">Моё питание</h1>
   <div class="ha">
     <span id="appVersion" style="font-size:10px;color:var(--text2);opacity:0.5;margin-right:2px;align-self:center"></span>
-    <button class="ib" id="refreshBtn" onclick="location.reload()" style="display:none" title="Обновить приложение">↺</button>
+    <button class="ib" id="refreshBtn" onclick="forceUpdate()" style="display:none" title="Обновить приложение">↺</button>
     <button class="ib" onclick="switchToSettings()">⚙</button>
   </div>
 </div>
@@ -3991,8 +3991,26 @@ function initSettingsUI(){
   }
 }
 
+function forceUpdate(){
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistration().then(reg=>{
+      if(reg){
+        reg.update().then(()=>{
+          // Удаляем все кеши и перезагружаем
+          caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k))))
+            .then(()=>location.reload(true));
+        });
+      }else{
+        location.reload(true);
+      }
+    });
+  }else{
+    location.reload(true);
+  }
+}
+
 /* ── INIT ── */
-const APP_VERSION='2.2.2';
+const APP_VERSION='2.2.3';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
