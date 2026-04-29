@@ -937,6 +937,15 @@ function switchToSettings(){
   S.currentScreen={name:'settings',isMain:true};save();
   show('settings');
   initSettingsUI();
+  // Если есть ожидающий маппинг — показываем форму
+  if(S._pendingMapping?.length){
+    const pending=S._pendingMapping;
+    S._pendingMapping=null;save();
+    setTimeout(async()=>{
+      await showMappingConfirmation(pending);
+      if(S.yazioData)await deductFromFridge(S.yazioData,[],false);
+    },300);
+  }
 }
 function toCalc(){subScreen('calc','Калькулятор КБЖУ','settings');}
 function showAddProduct(){subScreen('add-product','Добавить продукт','products');}
@@ -1826,6 +1835,7 @@ function renderMenu(){
           ${tod?'<span class="dbg dbg-today">сегодня</span>':''}
           ${wo?'<span class="dbg dbg-wo">💪 тренировка</span>':''}
           ${allAway?'<span class="dbg" style="background:rgba(148,163,184,0.15);color:var(--text2)">🏃 вне дома</span>':''}
+          ${dm.prepNote?'<span class="dbg" style="background:rgba(251,191,36,0.15);color:#fbbf24">⏰ подготовить</span>':''}
         </div>
       </div>
       <div>`;
@@ -2185,6 +2195,7 @@ function showDay(idx){
   }});
   html+=`</div>`;
   if(dm.reason)html+=`<div class="card"><div class="ct">Почему именно это?</div><div class="rb">${esc(dm.reason)}</div></div>`;
+  if(dm.prepNote)html+=`<div class="card" style="border-color:rgba(251,191,36,0.3)"><div class="ct">⏰ Подготовить заранее</div><div class="rb" style="color:var(--text2)">${esc(dm.prepNote)}</div></div>`;
   // ЖКТ за день
   const dateStr=d.date.toISOString().split('T')[0];
   const gutDay=S.gutLog.filter(g=>g.date===dateStr);
@@ -2266,43 +2277,72 @@ async function generateWeekMenu(){
     S.awayPeriods.map(p=>`${p.from} (с ${p.fromMeal}) по ${p.to} (по ${p.toMeal}): ${p.note||''}`).join('\n')
     :'';
 
-  const prompt=`Сегодня ${today}. Составь меню на текущую неделю (7 дней, 0=пн) из ТОЛЬКО имеющихся продуктов.
-Количество приёмов пищи в день: ${mealCount} (${meals.join(', ')}).
+  const dayOfWeek=['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'][new Date().getDay()];
+  const prompt=`Сегодня ${today} (${dayOfWeek}). Составь меню на текущую неделю (7 дней, dayIndex 0=пн).
+Приёмов пищи в день: ${mealCount} (${meals.join(', ')}).
 
-ПРОДУКТЫ:
+━━━ ГЛАВНАЯ ЦЕЛЬ ━━━
+Максимально использовать продукты из холодильника.
+Приоритет — продукты с БЛИЖАЙШИМ сроком годности (они в начале списка).
+К концу недели запасы должны быть минимальны.
+Покупки только для восполнения критически недостающих нутриентов.
+
+━━━ РАСХОД ПРОДУКТОВ ВНУТРИ НЕДЕЛИ ━━━
+Рассчитывай остатки последовательно день за днём.
+Если в пн используешь гречку 100г (из 200г) — во вт доступно только 100г.
+НЕ планируй продукт если его не хватит на порцию.
+В поле "warnings" указывай если продукта не хватает.
+
+━━━ ПРОДУКТЫ (сортированы по сроку годности) ━━━
 ${prods}
 
-ЦЕЛИ: ${g.kcal}ккал | Б${g.prot}г | Ж${g.fat}г | У${g.carb}г | клетчатка ${g.fiber}г
-Жиры нас./ненас.: ${g.fa} | Углеводы слож./прост.: ${g.ca}
-ЛЮБИМЫЕ блюда (включать чаще): ${liked}
-СТОП-ЛИСТ: ${disliked}
-ПОЖЕЛАНИЯ К ДНЯМ:
-${wishes||'нет'}
-ПОСТОЯННЫЕ ПОЖЕЛАНИЯ: ${g.prefs||'нет'}
-${yazio}
-${yazioProfile}
+━━━ НУТРИЕНТНЫЕ ЦЕЛИ НА ДЕНЬ ━━━
+${g.kcal}ккал | Б${g.prot}г | Ж${g.fat}г | У${g.carb}г | клетчатка ${g.fiber}г
+Насыщ./ненасыщ. жиры: ${g.fa} | Сложн./простые углеводы: ${g.ca}
+
+━━━ НУТРИЕНТНАЯ ПОЛНОЦЕННОСТЬ ━━━
+За неделю обязательно обеспечь:
+- Витамины A, D, E, K (жирорастворимые) — сочетай с жирами в том же приёме
+- Витамин C — сочетай с источниками железа, разрушается при нагреве
+- Железо — с витамином C для усвоения, НЕ с кальцием и кофе
+- Кальций — НЕ с железом, шпинатом, свёклой (оксалаты)
+- Омега-3 — если есть рыба, льняное/конопляное масло, семена чиа
+- Клетчатка — не менее ${g.fiber}г/день (пребиотик для микробиома)
+- Пробиотики (йогурт, кефир, творог) — с клетчаткой для синбиотического эффекта
+
+━━━ СИНЕРГИЯ И КОНФЛИКТЫ НУТРИЕНТОВ ━━━
+✓ Витамин C + железо → усвоение Fe ×2-3
+✓ Витамин D + жиры → жирорастворимый, нужны жиры
+✓ Куркума + чёрный перец → усвоение куркумина ×20
+✓ Пробиотики + клетчатка → синбиотический эффект
+✗ Кальций + железо → конкурируют, разноси по приёмам пищи
+✗ Кофе/чай + железо → снижают усвоение, пить через 1ч после еды
+✗ Шпинат/свёкла (оксалаты) + кальций → не сочетай
+✗ Бобовые/злаки (фитаты) + Fe, Zn, Ca → замачивание снижает фитаты на 50%
+
+━━━ УСВОЯЕМОСТЬ ━━━
+- Жиры из круп (гречка, овсянка, рис): усваивается 60-80% из-за клетчатки/фитатов
+- Жиры из орехов и семян: ~80% из-за клеточных стенок
+- Растительный белок: 60-85%, животный белок: 90-95%
+- Сахарозаменители (эритрит, стевия, сукралоза): 0 ккал, 0 углеводов
+- Чистые углеводы = общие углеводы − клетчатка
 ${awayInfo}
-ТРЕНИРОВКИ: дни ${woDays}, примерное время ${woTime}
-В дни тренировок:
-- За 2-3 часа до тренировки: больше сложных углеводов (предтрен)
-- В течение 30-60 мин после: белок + немного быстрых углеводов (посттрен)
-- Добавь в workoutNote объяснение структуры питания в этот день
+━━━ ТРЕНИРОВКИ ━━━
+Дни: ${woDays}, время: ~${woTime}
+- За 2-3ч до: сложные углеводы + немного белка
+- 30-60мин после: белок (20-30г) + быстрые углеводы (30-50г)
 
-ПРОБЛЕМЫ С ЖКТ (эти продукты/сочетания вызывали дискомфорт — учти):
-${gutBad}
+━━━ ПРЕДПОЧТЕНИЯ И ИСТОРИЯ ━━━
+Любимые блюда (включать чаще): ${liked}
+Стоп-лист: ${disliked}
+Пожелания к дням: ${wishes||'нет'}
+Постоянные пожелания: ${g.prefs||'нет'}
+${yazio}${yazioProfile}
+ЖКТ-проблемы (учти при планировании): ${gutBad}
 
-НЮАНСЫ ПО УСВОЯЕМОСТИ (учитывай при расчёте реального питательного вклада):
-- Жиры из круп (гречка, овсянка, рис и др.) усваиваются на 20-40% хуже из-за клетчатки и фитиновой кислоты
-- Жиры из орехов и семян усваиваются на ~80% из-за клеточных стенок
-- Растительный белок (бобовые, злаки, орехи) усваивается на 60-85%, животный — на 90-95%
-- Сахарозаменители (эритрит, стевия, сукралоза, аспартам) не считать в калории и углеводы
-- Клетчатка — вычитать из общих углеводов при расчёте чистых углеводов
-- Фитиновая кислота в бобовых снижает усвоение железа, цинка, кальция — рекомендуй замачивание
-- Скоропортящиеся — в начало недели
-- reason: 1-2 предложения о нутриентах/витаминах дня
-
-Ответь ТОЛЬКО JSON без markdown:
-{"days":[{"dayIndex":0,"meals":{"Завтрак":{"name":"Название (ингредиент1 XХг, ингредиент2 XXг)","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=3?',"Обед":{"name":"Название (ингредиент1 XXг, ...)","kcal":0,"prot":0,"fat":0,"carb":0}':''},"Ужин":{"name":"Название (ингредиент1 XXг, ...)","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=4?',"Перекус":{"name":"Название (ингредиент1 XXг, ...)","kcal":0,"prot":0,"fat":0,"carb":0}':''}},"macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"reason":"...","workoutNote":"...","warnings":[]}],"shopping":["..."]}`;
+━━━ ФОРМАТ ОТВЕТА ━━━
+ТОЛЬКО JSON без markdown:
+{"days":[{"dayIndex":0,"meals":{"Завтрак":{"name":"Название (ингредиент1 XXг, ингредиент2 XXг)","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=3?',"Обед":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}':''},"Ужин":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=4?',"Перекус":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}':''}},"macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"reason":"1-2 предложения: какие нутриенты/витамины закрывает этот день и почему такой порядок продуктов","prepNote":"Что подготовить заранее для этого дня или следующего: вытащить из морозилки, замочить крупу и т.п. Пусто если не нужно.","workoutNote":"Объяснение структуры питания в день тренировки. Пусто если не тренировочный день.","warnings":[]}],"shopping":["продукт для восполнения нутриентов — только если критически не хватает"]}`;
 
   const resp=await claude([{role:'user',content:prompt}],'Ты диетолог-нутрициолог. Только JSON без markdown.',4000);
   if(!resp||typeof resp==='object'){
@@ -2311,7 +2351,7 @@ ${gutBad}
   try{
     const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
     S.menu={};
-    data.days.forEach(d=>{S.menu[d.dayIndex]={...d.meals,macros:d.macros,reason:d.reason,workoutNote:d.workoutNote,warnings:d.warnings||[]};});
+    data.days.forEach(d=>{S.menu[d.dayIndex]={...d.meals,macros:d.macros,reason:d.reason,prepNote:d.prepNote||'',workoutNote:d.workoutNote,warnings:d.warnings||[]};});
     S.shopping=data.shopping||[];S.shoppingChecked={};
     // Авто-добавление блюд в список
     data.days.forEach(d=>{meals.forEach(t=>{const m=d.meals?.[t];if(m?.name&&!S.dishes.find(x=>x.name.toLowerCase()===m.name.toLowerCase())){S.dishes.push({id:Date.now()+Math.random(),name:m.name,ingredients:'',kcal:m.kcal||0,prot:m.prot||0,fat:m.fat||0,carb:m.carb||0,note:'',liked:false,disliked:false});}});});
@@ -2578,9 +2618,9 @@ async function loadYazio(){
     if(!r.ok)throw new Error('Файл не найден');
     const data=await r.json();
 
-    // Проверяем не загружали ли уже этот файл
+    // Если файл тот же (synced_at не изменился) — пропускаем
     if(data.synced_at&&S.lastYazioSyncedAt===data.synced_at){
-      if(el)el.innerHTML=`<div class="yz-ok">✓ Данные уже загружены (${new Date(data.synced_at).toLocaleDateString('ru-RU')} ${new Date(data.synced_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}). Вычитание не повторяется.</div>`;
+      if(el)el.innerHTML=`<div class="yz-ok">✓ Файл не изменился с ${new Date(data.synced_at).toLocaleDateString('ru-RU')} ${new Date(data.synced_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})} — вычитание не повторяется.</div>`;
       return;
     }
 
@@ -2895,10 +2935,18 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
 
   if(unknown.length>0&&!dryRun){
     addInfo(`${unknown.length} новых блюд → показываю форму сопоставления`);
-    alert(`Сейчас должна появиться форма сопоставления (${unknown.length} блюд)`);
-    await showMappingConfirmation(unknown);
-    addInfo('Маппинг сохранён, применяю вычитание...');
-    await deductFromFridge(yazioData,[],false);
+    // Если пользователь сейчас не на настройках — сохраняем и покажем когда откроет
+    const onSettings=document.getElementById('scr-settings')?.classList.contains('active');
+    if(!onSettings){
+      S._pendingMapping=unknown;
+      save();
+      addInfo('Открой Настройки → появится форма сопоставления');
+    }else{
+      alert(`Сейчас должна появиться форма сопоставления (${unknown.length} блюд)`);
+      await showMappingConfirmation(unknown);
+      addInfo('Маппинг сохранён, применяю вычитание...');
+      await deductFromFridge(yazioData,[],false);
+    }
     return;
   }
 
@@ -2949,12 +2997,12 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
         const deductFromThis=Math.min(toDeduct,prod.weight);
         if(!dryRun){
           sessionSnapshot.push({id:prod.id,name:prod.name,weightBefore:before});
+          // Если вычитаем из невскрытой — вскрываем её
+          if(!prod.opened)prod.opened=true;
           prod.weight=Math.max(0,Math.round(prod.weight-deductFromThis));
           if(prod.weight===0){
-            // Удаляем пустую упаковку
             const idx=S.products.indexOf(prod);
             if(idx>=0)S.products.splice(idx,1);
-            // Вскрываем следующую
             const nextPkg=packages.find(p=>p!==prod&&!p.opened&&p.weight>0);
             if(nextPkg)nextPkg.opened=true;
           }
@@ -3919,15 +3967,18 @@ function initSettingsUI(){
   const mc=document.getElementById('mc-'+(fs.mealCount||2));
   if(mc)mc.classList.add('sel');
   initWorkoutGrid();
-  // Yazio info
+  // Yazio info — показываем только если yazioInfo пустой
+  // (не перезаписываем диагностику от loadYazio)
   if(S.yazioData){
     const el=document.getElementById('yazioInfo');
-    if(el)el.innerHTML=`<div class="yz-ok">✓ Данные загружены: ${new Date(S.yazioData.synced_at).toLocaleDateString('ru-RU')} · ${S.yazioData.frequent_dishes?.length||0} блюд</div>`;
+    if(el&&!el.innerHTML.trim()){
+      el.innerHTML=`<div class="yz-ok">✓ Данные загружены: ${new Date(S.yazioData.synced_at).toLocaleDateString('ru-RU')} · ${S.yazioData.frequent_dishes?.length||0} блюд</div>`;
+    }
   }
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.1.4';
+const APP_VERSION='2.2.0';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
