@@ -238,11 +238,21 @@ select option{background:#1a1a2e;color:var(--text)}
 <!-- GUT TRACKER -->
 <div class="scr" id="scr-gut">
   <div class="si">
-    <!-- Pending check (показывается если есть что проверить) -->
     <div id="gutPending" style="display:none"></div>
+    <!-- Подозреваемые и непереносимости -->
+    <div id="gutSuspectsCard" style="display:none" class="card">
+      <div class="sh"><span class="ct" style="margin:0">⚠ Подозреваемые</span>
+        <span id="gutSuspectsCount" style="font-size:11px;color:var(--acc2)"></span>
+      </div>
+      <div id="gutSuspectsList"></div>
+    </div>
+    <div id="gutIntolerancesCard" style="display:none" class="card">
+      <div class="sh"><span class="ct" style="margin:0">🚫 Непереносимости</span></div>
+      <div id="gutIntolerancesList"></div>
+    </div>
     <div class="card">
       <div class="sh"><span class="ct" style="margin:0">История ЖКТ</span>
-        <button class="addb" onclick="showGutManual()">+ вручную</button>
+        <button class="addb" onclick="showGutManual()">+ запись</button>
       </div>
       <div id="gutHistory"></div>
     </div>
@@ -250,7 +260,22 @@ select option{background:#1a1a2e;color:var(--text)}
       <div class="ct">Анализ Claude</div>
       <div id="gutAnalysis"></div>
     </div>
-    <button class="bs" onclick="analyzeGut()" style="margin-top:4px">🔍 Проанализировать паттерны</button>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="bs" onclick="analyzeGut()" style="flex:1">🔍 Анализировать паттерны</button>
+      <button class="bs" onclick="subScreen('gut-suspects','Подозреваемые','gut')" style="flex:1">📋 Подозреваемые</button>
+    </div>
+  </div>
+</div>
+
+<!-- GUT SUSPECTS SCREEN -->
+<div class="scr" id="scr-gut-suspects">
+  <div class="si">
+    <div class="card">
+      <div class="ct">⚠ Подозреваемые</div>
+      <div id="gutSuspectsDetail"></div>
+      <div class="ct" style="margin-top:12px">🚫 Подтверждённые непереносимости</div>
+      <div id="gutIntolerancesDetail"></div>
+    </div>
   </div>
 </div>
 
@@ -719,7 +744,7 @@ select option{background:#1a1a2e;color:var(--text)}
 <div class="scr" id="scr-gut-manual">
   <div class="si">
     <div class="card">
-      <div class="ct">Оценка состояния ЖКТ</div>
+      <div class="ct">Запись о самочувствии</div>
       <div class="ig"><label class="il">После какого приёма пищи?</label>
         <input type="text" id="gm-meal" placeholder="Завтрак, обед...">
       </div>
@@ -729,9 +754,53 @@ select option{background:#1a1a2e;color:var(--text)}
           <button id="gst-bad" onclick="setGutStatus('bad')" style="flex:1;padding:10px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:13px;cursor:pointer">⚠ Дискомфорт</button>
         </div>
       </div>
-      <div class="ig" id="gutNoteWrap" style="display:none">
-        <label class="il">Что именно (вздутие, тяжесть, изжога...)</label>
-        <textarea id="gm-note" placeholder="Опиши симптомы..." style="min-height:65px"></textarea>
+      <!-- Детали дискомфорта -->
+      <div id="gutDetailWrap" style="display:none">
+        <div class="ig"><label class="il">Тип симптома (можно несколько)</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px" id="gutSymptomBtns">
+            ${['вздутие','боль','тяжесть','изжога','тошнота','диарея','запор','другое'].map(s=>`<button onclick="toggleSymptom('${s}',this)" style="padding:5px 10px;border-radius:20px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">${s}</button>`).join('')}
+          </div>
+        </div>
+        <div class="ig"><label class="il">Интенсивность</label>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            ${[1,2,3,4,5].map(i=>`<button id="gint-${i}" onclick="setGutIntensity(${i})" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:13px;cursor:pointer">${i}</button>`).join('')}
+          </div>
+        </div>
+        <div class="ig"><label class="il">Когда появилось после еды?</label>
+          <select id="gm-timeafter" style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:9px;padding:9px">
+            <option value="">—</option>
+            <option value="сразу">Сразу (до 15 мин)</option>
+            <option value="30мин">~30 минут</option>
+            <option value="1-2ч">1-2 часа</option>
+            <option value="3-4ч">3-4 часа</option>
+            <option value="6+ч">6+ часов</option>
+          </select>
+        </div>
+        <div class="ig"><label class="il">Контекст</label>
+          <select id="gm-context" style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:9px;padding:9px">
+            <option value="обычный">Обычный день</option>
+            <option value="стресс">Стресс</option>
+            <option value="усталость">Усталость</option>
+            <option value="болезнь">Нездоровится</option>
+          </select>
+        </div>
+        <div class="ig"><label class="il">Объём порции</label>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <button id="gvol-small" onclick="setGutVolume('маленькая',this)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">Маленькая</button>
+            <button id="gvol-med" onclick="setGutVolume('средняя',this)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">Средняя</button>
+            <button id="gvol-big" onclick="setGutVolume('большая',this)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">Большая</button>
+          </div>
+        </div>
+        <div class="ig"><label class="il">Скорость еды</label>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <button onclick="setGutSpeed('быстро',this)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">Быстро</button>
+            <button onclick="setGutSpeed('нормально',this)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">Нормально</button>
+            <button onclick="setGutSpeed('медленно',this)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">Медленно</button>
+          </div>
+        </div>
+        <div class="ig"><label class="il">Дополнительно</label>
+          <textarea id="gm-note" placeholder="Что именно беспокоит, что ели..." style="min-height:55px"></textarea>
+        </div>
       </div>
       <div class="ig"><label class="il">Время</label>
         <input type="text" id="gm-time" placeholder="14:30">
@@ -803,8 +872,10 @@ let S={
   },
   chatHistory:[],wishes:[],
   dishes:[],dishFilter:'all',
-  gutLog:[],     // {id,date,meal,status:'ok'|'bad',note,time}
+  gutLog:[],     // {id,date,meal,status:'ok'|'bad',note,time,symptoms:[],intensity,timeAfter,context,volume,speed}
   gutPending:null, // {dayIdx,mealType} — ожидает оценки
+  gutSuspects:[],  // [{name,type:'product'|'nutrient'|'pattern',hypothesis,observations:[],status:'suspect'|'testing'|'confirmed'|'cleared'}]
+  gutIntolerances:[], // [{name,type,confirmedAt,note}]
   yazioData:null,
   prevScreen:'menu',currentDayIdx:null,yazioDeducted:{},awayPeriods:[]
 };
@@ -2055,6 +2126,11 @@ function dislikeMenu(name){
 
 /* ── GUT TRACKER ── */
 let gutStatusSel='ok';
+let gutSymptomsSel=[];
+let gutIntensitySel=null;
+let gutVolumeSel=null;
+let gutSpeedSel=null;
+
 function setGutStatus(s){
   gutStatusSel=s;
   document.getElementById('gst-ok').style.background=s==='ok'?'rgba(74,222,128,0.15)':'none';
@@ -2062,17 +2138,59 @@ function setGutStatus(s){
   document.getElementById('gst-bad').style.background=s==='bad'?'rgba(233,69,96,0.12)':'none';
   document.getElementById('gst-bad').style.color=s==='bad'?'var(--acc)':'var(--text2)';
   document.getElementById('gst-bad').style.borderColor=s==='bad'?'rgba(233,69,96,0.4)':'var(--cb)';
-  document.getElementById('gutNoteWrap').style.display=s==='bad'?'block':'none';
+  document.getElementById('gutDetailWrap').style.display=s==='bad'?'block':'none';
+}
+
+function toggleSymptom(s,btn){
+  if(gutSymptomsSel.includes(s)){
+    gutSymptomsSel=gutSymptomsSel.filter(x=>x!==s);
+    btn.style.background='none';btn.style.color='var(--text2)';btn.style.borderColor='var(--cb)';
+  }else{
+    gutSymptomsSel.push(s);
+    btn.style.background='rgba(233,69,96,0.15)';btn.style.color='var(--acc)';btn.style.borderColor='rgba(233,69,96,0.4)';
+  }
+}
+
+function setGutIntensity(i){
+  gutIntensitySel=i;
+  for(let j=1;j<=5;j++){
+    const btn=document.getElementById('gint-'+j);
+    if(btn){btn.style.background=j<=i?'rgba(233,69,96,0.15)':'none';btn.style.color=j<=i?'var(--acc)':'var(--text2)';}
+  }
+}
+
+function setGutVolume(v,btn){
+  gutVolumeSel=v;
+  document.querySelectorAll('[id^="gvol-"]').forEach(b=>{b.style.background='none';b.style.color='var(--text2)';});
+  if(btn){btn.style.background='rgba(129,140,248,0.15)';btn.style.color='var(--acc3)';}
+}
+
+function setGutSpeed(v,btn){
+  gutSpeedSel=v;
+  // Подсвечиваем выбранную кнопку скорости
+  btn.parentElement.querySelectorAll('button').forEach(b=>{b.style.background='none';b.style.color='var(--text2)';});
+  btn.style.background='rgba(129,140,248,0.15)';btn.style.color='var(--acc3)';
 }
 
 function saveGutEntry(){
   const meal=document.getElementById('gm-meal').value.trim();
-  const note=document.getElementById('gm-note').value.trim();
+  const note=document.getElementById('gm-note')?.value.trim()||'';
   const time=document.getElementById('gm-time').value.trim();
+  const timeAfter=document.getElementById('gm-timeafter')?.value||'';
+  const context=document.getElementById('gm-context')?.value||'обычный';
   const today=new Date().toISOString().split('T')[0];
-  S.gutLog.push({id:Date.now(),date:today,meal:meal||'—',status:gutStatusSel,note,time});
+  const entry={
+    id:Date.now(),date:today,meal:meal||'—',status:gutStatusSel,note,time,
+    symptoms:[...gutSymptomsSel],
+    intensity:gutIntensitySel,
+    timeAfter,context,
+    volume:gutVolumeSel,
+    speed:gutSpeedSel,
+  };
+  S.gutLog.push(entry);
   save();
-  // Если было дискомфорт — сразу предложить анализ
+  // Сброс формы
+  gutSymptomsSel=[];gutIntensitySel=null;gutVolumeSel=null;gutSpeedSel=null;
   if(gutStatusSel==='bad'){
     goBack();
     setTimeout(()=>analyzeGut(),300);
@@ -2134,10 +2252,22 @@ function renderGut(){
   const el=document.getElementById('gutHistory');
   const sorted=[...S.gutLog].sort((a,b)=>b.id-a.id).slice(0,30);
   if(!sorted.length){el.innerHTML='<p style="font-size:12px;color:var(--text2)">Записей пока нет.</p>';return;}
-  el.innerHTML=sorted.map(g=>`<div class="gut-entry">
-    <div class="gut-time">${g.date} ${g.time?'· '+g.time:''} · ${g.meal}</div>
-    <div class="gut-text ${g.status==='ok'?'gut-status-ok':'gut-status-bad'}">${g.status==='ok'?'✓ Всё ок':'⚠ '+esc(g.note||'Дискомфорт')}</div>
-  </div>`).join('');
+  el.innerHTML=sorted.map(g=>{
+    const symptoms=g.symptoms?.length?`<span style="font-size:10px;color:var(--acc)"> · ${g.symptoms.join(', ')}</span>`:'';
+    const intensity=g.intensity?`<span style="font-size:10px;color:var(--text2)"> · ${g.intensity}/5</span>`:'';
+    const timeAfter=g.timeAfter?`<span style="font-size:10px;color:var(--text2)"> · через ${g.timeAfter}</span>`:'';
+    return`<div class="gut-entry">
+      <div class="gut-time">${g.date} ${g.time?'· '+g.time:''} · ${g.meal}${timeAfter}</div>
+      <div class="gut-text ${g.status==='ok'?'gut-status-ok':'gut-status-bad'}">${g.status==='ok'?'✓ Всё ок':'⚠ '+esc(g.note||'Дискомфорт')}${symptoms}${intensity}</div>
+    </div>`;
+  }).join('');
+  renderGutSuspects();
+}
+
+function removeIntolerance(idx){
+  if(!confirm('Удалить из непереносимостей?'))return;
+  S.gutIntolerances.splice(idx,1);
+  save();renderGutSuspects();
 }
 
 async function analyzeGut(){
@@ -2145,20 +2275,141 @@ async function analyzeGut(){
   const card=document.getElementById('gutAnalysisCard');
   const el=document.getElementById('gutAnalysis');
   card.style.display='block';
-  el.innerHTML='<span class="spin"></span> Анализирую...';
+  el.innerHTML='<span class="spin"></span> Анализирую паттерны...';
 
-  const badEntries=S.gutLog.filter(g=>g.status==='bad').slice(-20);
+  const badEntries=S.gutLog.filter(g=>g.status==='bad').slice(-30);
   if(!badEntries.length){el.innerHTML='Записей о дискомфорте пока нет.';return;}
 
-  const log=badEntries.map(g=>`${g.date} после ${g.meal}: ${g.note}`).join('\n');
-  const products=S.products.map(p=>p.name).join(', ');
-  const resp=await claude([{role:'user',content:`Проанализируй записи о состоянии ЖКТ:
-${log}
-Продукты которые есть в холодильнике: ${products}
-Определи какие продукты или сочетания вероятнее всего вызывают дискомфорт, объясни почему, дай рекомендации. Пиши по-русски, конкретно.`}],
-  'Ты диетолог-гастроэнтеролог. По-русски, дружелюбно.',1000);
-  el.innerHTML=`<div style="font-size:13px;line-height:1.7;white-space:pre-wrap">${esc(resp||'Не удалось проанализировать.')}</div>`;
+  const goodEntries=S.gutLog.filter(g=>g.status==='ok').slice(-30);
+
+  const formatEntry=g=>{
+    const parts=[`${g.date} после ${g.meal}`];
+    if(g.symptoms?.length)parts.push(`симптомы: ${g.symptoms.join(', ')}`);
+    if(g.intensity)parts.push(`интенсивность: ${g.intensity}/5`);
+    if(g.timeAfter)parts.push(`через: ${g.timeAfter}`);
+    if(g.context&&g.context!=='обычный')parts.push(`контекст: ${g.context}`);
+    if(g.volume)parts.push(`объём: ${g.volume}`);
+    if(g.speed)parts.push(`скорость: ${g.speed}`);
+    if(g.note)parts.push(`заметка: ${g.note}`);
+    return parts.join(' | ');
+  };
+
+  const badLog=badEntries.map(formatEntry).join('\n');
+  const goodLog=goodEntries.length?goodEntries.map(g=>`${g.date} после ${g.meal}: ок`).join('\n'):'нет данных';
+  const suspects=(S.gutSuspects||[]).map(s=>`${s.name} (${s.status})`).join(', ')||'нет';
+  const intolerances=(S.gutIntolerances||[]).map(s=>s.name).join(', ')||'нет';
+
+  const resp=await claude([{role:'user',content:`Проанализируй дневник ЖКТ и выяви паттерны дискомфорта.
+
+ЗАПИСИ С ДИСКОМФОРТОМ:
+${badLog}
+
+ЗАПИСИ БЕЗ ПРОБЛЕМ (для сравнения):
+${goodLog}
+
+УЖЕ ИЗВЕСТНО:
+Подозреваемые: ${suspects}
+Подтверждённые непереносимости: ${intolerances}
+
+ПРОДУКТЫ В ХОЛОДИЛЬНИКЕ: ${S.products.slice(0,20).map(p=>p.name).join(', ')}
+
+ЗАДАЧА:
+1. Определи УРОВЕНЬ проблемы (продукт / группа нутриентов / количество / время суток / скорость еды / стресс / сочетание продуктов)
+2. Выдвини конкретные гипотезы с объяснением
+3. Предложи что проверить и как (элиминация, тест)
+4. Укажи подозреваемые продукты или паттерны для отслеживания
+5. Если симптомы серьёзные или частые — рекомендуй врача
+
+Ответь в формате JSON:
+{"summary":"краткий вывод","level":"продукт|нутриент|количество|скорость|стресс|время|сочетание","hypotheses":[{"text":"гипотеза","confidence":"высокая|средняя|низкая","action":"что делать"}],"suspects":[{"name":"название","type":"product|nutrient|pattern","hypothesis":"почему подозревается"}],"doctorAdvice":true|false,"doctorReason":"почему к врачу если true"}`}],
+  'Ты диетолог-гастроэнтеролог. Только JSON без markdown.',1200);
+
+  try{
+    const data=JSON.parse((resp||'').replace(/```json|```/g,'').trim());
+
+    // Обновляем список подозреваемых
+    if(data.suspects?.length){
+      if(!S.gutSuspects)S.gutSuspects=[];
+      data.suspects.forEach(s=>{
+        const existing=S.gutSuspects.find(x=>x.name.toLowerCase()===s.name.toLowerCase());
+        if(!existing){
+          S.gutSuspects.push({name:s.name,type:s.type,hypothesis:s.hypothesis,observations:[],status:'suspect',addedAt:new Date().toISOString()});
+        }
+      });
+      save();
+      renderGutSuspects();
+    }
+
+    let html=`<div style="font-size:13px;line-height:1.7">`;
+    html+=`<div style="font-weight:600;margin-bottom:8px">${esc(data.summary||'')}</div>`;
+    html+=`<div style="font-size:11px;color:var(--text2);margin-bottom:10px">Уровень проблемы: ${esc(data.level||'')}</div>`;
+    if(data.hypotheses?.length){
+      html+=`<div style="font-weight:500;margin-bottom:6px">Гипотезы:</div>`;
+      data.hypotheses.forEach(h=>{
+        const confColor=h.confidence==='высокая'?'#4ade80':h.confidence==='средняя'?'#fbbf24':'var(--text2)';
+        html+=`<div style="padding:8px;background:var(--cs);border-radius:8px;margin-bottom:6px">
+          <div style="font-size:12px;color:${confColor}">${h.confidence} вероятность</div>
+          <div>${esc(h.text)}</div>
+          <div style="font-size:11px;color:var(--acc3);margin-top:4px">→ ${esc(h.action)}</div>
+        </div>`;
+      });
+    }
+    if(data.doctorAdvice){
+      html+=`<div style="padding:10px;background:rgba(233,69,96,0.1);border:0.5px solid rgba(233,69,96,0.4);border-radius:8px;margin-top:8px">
+        🏥 <b>Рекомендую обратиться к врачу:</b> ${esc(data.doctorReason||'')}
+      </div>`;
+    }
+    html+='</div>';
+    el.innerHTML=html;
+  }catch(e){
+    el.innerHTML=`<div style="font-size:13px;white-space:pre-wrap">${esc(resp||'Не удалось проанализировать.')}</div>`;
+  }
   save();
+}
+
+function renderGutSuspects(){
+  const suspects=S.gutSuspects||[];
+  const intolerances=S.gutIntolerances||[];
+
+  // На главном экране ЖКТ
+  const card=document.getElementById('gutSuspectsCard');
+  const list=document.getElementById('gutSuspectsList');
+  const count=document.getElementById('gutSuspectsCount');
+  if(card&&suspects.length){
+    card.style.display='block';
+    if(count)count.textContent=`${suspects.length}`;
+    if(list)list.innerHTML=suspects.map((s,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--cb)">
+      <span style="font-size:12px;flex:1">${esc(s.name)}</span>
+      <span style="font-size:10px;color:var(--acc2)">${s.status==='suspect'?'подозрение':s.status==='testing'?'тестируется':'подтверждён'}</span>
+      <button onclick="confirmIntolerance(${i})" style="font-size:10px;background:none;border:0.5px solid var(--cb);color:var(--text2);border-radius:6px;padding:2px 6px;cursor:pointer">✓ Подтвердить</button>
+      <button onclick="clearSuspect(${i})" style="font-size:10px;background:none;border:none;color:var(--text2);cursor:pointer">×</button>
+    </div>`).join('');
+  }else if(card)card.style.display='none';
+
+  const intCard=document.getElementById('gutIntolerancesCard');
+  const intList=document.getElementById('gutIntolerancesList');
+  if(intCard&&intolerances.length){
+    intCard.style.display='block';
+    if(intList)intList.innerHTML=intolerances.map((s,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0">
+      <span style="font-size:13px">🚫</span>
+      <span style="font-size:12px;flex:1">${esc(s.name)}</span>
+      <button onclick="removeIntolerance(${i})" style="font-size:10px;background:none;border:none;color:var(--text2);cursor:pointer">×</button>
+    </div>`).join('');
+  }else if(intCard)intCard.style.display='none';
+}
+
+function confirmIntolerance(idx){
+  const s=S.gutSuspects[idx];
+  if(!confirm(`Подтвердить непереносимость: ${s.name}?\nОн будет добавлен в постоянный стоп-лист.`))return;
+  if(!S.gutIntolerances)S.gutIntolerances=[];
+  S.gutIntolerances.push({name:s.name,type:s.type,confirmedAt:new Date().toISOString(),note:s.hypothesis});
+  S.gutSuspects.splice(idx,1);
+  save();renderGutSuspects();renderGut();
+}
+
+function clearSuspect(idx){
+  S.gutSuspects.splice(idx,1);
+  save();renderGutSuspects();
 }
 
 /* ── DAY DETAIL ── */
@@ -2235,7 +2486,15 @@ async function generateWeekMenu(){
   document.getElementById('menuContent').innerHTML=`<div class="es"><div class="ei" style="font-size:36px">🍽</div><div class="ett"><span class="spin"></span>Составляю меню...</div><div class="es2">Учитываю КБЖУ, сроки годности, тренировки и твои предпочтения</div></div>`;
   show('menu');
   const g=S.settings;const today=new Date().toISOString().split('T')[0];
+  const todayDow=new Date().getDay();// 0=вс,1=пн...6=сб
+  const todayIdx=todayDow===0?6:todayDow-1;// 0=пн...6=вс
   const meals=getMeals();const mealCount=meals.length;
+  // КБЖУ на один приём пищи
+  const kcalPerMeal=Math.round(g.kcal/mealCount);
+  const protPerMeal=Math.round(g.prot/mealCount);
+  const fatPerMeal=Math.round(g.fat/mealCount);
+  const carbPerMeal=Math.round(g.carb/mealCount);
+  const fiberPerMeal=Math.round((g.fiber||30)/mealCount);
   const prods=S.products.map(p=>{
     const base=`• ${p.name}: ${p.weight||'?'}г, до ${p.expiry||'?'}, ${p.kcal||0}ккал/100г, Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}`;
     const extra=[];
@@ -2260,7 +2519,14 @@ async function generateWeekMenu(){
   const woDays=S.settings.workoutDays?.map(i=>DS[i]).join(', ')||'нет';
   const woTime=S.settings.workoutTime||'18:00';
   const wishes=S.wishes.slice(-10).map(w=>`• ${w}`).join('\n');
-  const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-15).map(g=>`${g.meal}: ${g.note}`).join('; ')||'нет';
+  const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-10).map(g=>{
+    const parts=[`${g.meal}: ${g.note||'дискомфорт'}`];
+    if(g.symptoms?.length)parts.push(g.symptoms.join(', '));
+    if(g.timeAfter)parts.push(`через ${g.timeAfter}`);
+    return parts.join(' | ');
+  }).join('; ')||'нет';
+  const gutIntolerances=(S.gutIntolerances||[]).map(i=>i.name).join(', ')||'нет';
+  const gutSuspects=(S.gutSuspects||[]).filter(s=>s.status==='suspect'||s.status==='testing').map(s=>s.name).join(', ')||'нет';
   const yazio=S.yazioData?`Данные Yazio: средние за период — ${S.yazioData.summary?.avg_kcal||0}ккал, частые блюда: ${(S.yazioData.frequent_dishes||[]).slice(0,10).join(', ')}`:'';
   const yazioProfile=S.yazioProfile?`
 ПРОФИЛЬ ПИТАНИЯ (основа для меню, использовать как приоритетный контекст):
@@ -2277,7 +2543,11 @@ async function generateWeekMenu(){
     :'';
 
   const dayOfWeek=['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'][new Date().getDay()];
-  const prompt=`Сегодня ${today} (${dayOfWeek}). Составь меню на текущую неделю (7 дней, dayIndex 0=пн).
+  const prompt=`Сегодня ${today} (${dayOfWeek}, dayIndex=${todayIdx}). Составь меню на текущую неделю.
+
+ВАЖНО: dayIndex 0=пн, 1=вт, 2=ср, 3=чт, 4=пт, 5=сб, 6=вс.
+Составляй меню ТОЛЬКО начиная с dayIndex=${todayIdx} (сегодня) до dayIndex=6.
+Дни с dayIndex < ${todayIdx} НЕ включай в ответ.
 Приёмов пищи в день: ${mealCount} (${meals.join(', ')}).
 
 ━━━ ГЛАВНАЯ ЦЕЛЬ ━━━
@@ -2295,8 +2565,10 @@ async function generateWeekMenu(){
 ━━━ ПРОДУКТЫ (сортированы по сроку годности) ━━━
 ${prods}
 
-━━━ НУТРИЕНТНЫЕ ЦЕЛИ НА ДЕНЬ ━━━
-${g.kcal}ккал | Б${g.prot}г | Ж${g.fat}г | У${g.carb}г | клетчатка ${g.fiber}г
+━━━ НУТРИЕНТНЫЕ ЦЕЛИ ━━━
+ИТОГО В ДЕНЬ: ${g.kcal}ккал | Б${g.prot}г | Ж${g.fat}г | У${g.carb}г | клетчатка ${g.fiber||30}г
+НА ОДИН ПРИЁМ (${mealCount} приёма/ов): ~${kcalPerMeal}ккал | Б~${protPerMeal}г | Ж~${fatPerMeal}г | У~${carbPerMeal}г
+Распредели КБЖУ равномерно между всеми ${mealCount} приёмами пищи.
 Насыщ./ненасыщ. жиры: ${g.fa} | Сложн./простые углеводы: ${g.ca}
 
 ━━━ НУТРИЕНТНАЯ ПОЛНОЦЕННОСТЬ ━━━
@@ -2338,10 +2610,12 @@ ${awayInfo}
 Постоянные пожелания: ${g.prefs||'нет'}
 ${yazio}${yazioProfile}
 ЖКТ-проблемы (учти при планировании): ${gutBad}
+ПОДТВЕРЖДЁННЫЕ НЕПЕРЕНОСИМОСТИ (исключить полностью): ${gutIntolerances}
+ПОДОЗРЕВАЕМЫЕ (включать осторожно, малыми порциями, с предупреждением в warnings): ${gutSuspects}
 
 ━━━ ФОРМАТ ОТВЕТА ━━━
-ТОЛЬКО JSON без markdown:
-{"days":[{"dayIndex":0,"meals":{"Завтрак":{"name":"Название (ингредиент1 XXг, ингредиент2 XXг)","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=3?',"Обед":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}':''},"Ужин":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=4?',"Перекус":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}':''}},"macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"reason":"1-2 предложения: какие нутриенты/витамины закрывает этот день и почему такой порядок продуктов","prepNote":"Что подготовить заранее для этого дня или следующего: вытащить из морозилки, замочить крупу и т.п. Пусто если не нужно.","workoutNote":"Объяснение структуры питания в день тренировки. Пусто если не тренировочный день.","warnings":[]}],"shopping":["продукт для восполнения нутриентов — только если критически не хватает"]}`;
+ТОЛЬКО JSON без markdown. Включай ТОЛЬКО дни начиная с dayIndex=${todayIdx}:
+{"days":[{"dayIndex":${todayIdx},"meals":{"${meals[0]}":{"name":"Название (ингредиент1 XXг, ингредиент2 XXг)","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=2?`,"${meals[1]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${mealCount>=3?`,"${meals[2]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${mealCount>=4?`,"${meals[3]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}}, "macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"reason":"какие нутриенты/витамины закрывает этот день","prepNote":"Что подготовить заранее. Пусто если не нужно.","workoutNote":"Структура питания в день тренировки. Пусто если нет.","warnings":[]}],"shopping":["только если критически не хватает нутриентов"]}`
 
   const resp=await claude([{role:'user',content:prompt}],'Ты диетолог-нутрициолог. Только JSON без markdown.',4000);
   if(!resp||typeof resp==='object'){
@@ -2459,7 +2733,16 @@ async function sendChat(){
   const gutLog14=S.gutLog.filter(g=>{
     const d=new Date(g.date||g.time||0);
     return(Date.now()-d.getTime())<14*864e5;
-  }).map(g=>`${g.date||''} ${g.meal||''}: ${g.status==='bad'?'❌':'✓'}${g.note?' '+g.note:''}`).join('\n')||'нет записей';
+  }).map(g=>{
+    const parts=[`${g.date||''} ${g.meal||''}: ${g.status==='bad'?'❌':'✓'}`];
+    if(g.symptoms?.length)parts.push(g.symptoms.join(', '));
+    if(g.intensity)parts.push(`${g.intensity}/5`);
+    if(g.timeAfter)parts.push(`через ${g.timeAfter}`);
+    if(g.note)parts.push(g.note);
+    return parts.join(' | ');
+  }).join('\n')||'нет записей';
+  const gutIntolerancesCtx=(S.gutIntolerances||[]).map(i=>i.name).join(', ')||'нет';
+  const gutSuspectsCtx=(S.gutSuspects||[]).map(s=>`${s.name}(${s.status})`).join(', ')||'нет';
 
   // ── ПРОФИЛЬ ПИТАНИЯ ──
   const profileCtx=S.yazioProfile?
@@ -2490,6 +2773,8 @@ ${menuCtx}
 
 ━━━ ЖКТ-ДНЕВНИК (последние 14 дней) ━━━
 ${gutLog14}
+Подтверждённые непереносимости: ${gutIntolerancesCtx}
+Подозреваемые: ${gutSuspectsCtx}
 
 ━━━ ЦЕЛИ ━━━
 ${g.kcal}ккал/день | Б${g.prot}г | Ж${g.fat}г | У${g.carb}г | клетчатка ${g.fiber||30}г
@@ -4010,7 +4295,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.2.3';
+const APP_VERSION='2.3.0';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
