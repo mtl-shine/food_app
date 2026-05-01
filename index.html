@@ -758,12 +758,23 @@ select option{background:#1a1a2e;color:var(--text)}
       <div id="gutDetailWrap" style="display:none">
         <div class="ig"><label class="il">Тип симптома (можно несколько)</label>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px" id="gutSymptomBtns">
-            ${['вздутие','боль','тяжесть','изжога','тошнота','диарея','запор','другое'].map(s=>`<button onclick="toggleSymptom('${s}',this)" style="padding:5px 10px;border-radius:20px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">${s}</button>`).join('')}
+            <button onclick="toggleSymptom('вздутие',this)" style="padding:5px 10px;border-radius:20px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">вздутие</button>
+            <button onclick="toggleSymptom('боль',this)" style="padding:5px 10px;border-radius:20px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">боль</button>
+            <button onclick="toggleSymptom('тяжесть',this)" style="padding:5px 10px;border-radius:20px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">тяжесть</button>
+            <button onclick="toggleSymptom('изжога',this)" style="padding:5px 10px;border-radius:20px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">изжога</button>
+            <button onclick="toggleSymptom('тошнота',this)" style="padding:5px 10px;border-radius:20px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">тошнота</button>
+            <button onclick="toggleSymptom('диарея',this)" style="padding:5px 10px;border-radius:20px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">диарея</button>
+            <button onclick="toggleSymptom('запор',this)" style="padding:5px 10px;border-radius:20px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">запор</button>
+            <button onclick="toggleSymptom('другое',this)" style="padding:5px 10px;border-radius:20px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:12px;cursor:pointer">другое</button>
           </div>
         </div>
         <div class="ig"><label class="il">Интенсивность</label>
           <div style="display:flex;gap:6px;margin-top:4px">
-            ${[1,2,3,4,5].map(i=>`<button id="gint-${i}" onclick="setGutIntensity(${i})" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:13px;cursor:pointer">${i}</button>`).join('')}
+            <button id="gint-1" onclick="setGutIntensity(1)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:13px;cursor:pointer">1</button>
+            <button id="gint-2" onclick="setGutIntensity(2)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:13px;cursor:pointer">2</button>
+            <button id="gint-3" onclick="setGutIntensity(3)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:13px;cursor:pointer">3</button>
+            <button id="gint-4" onclick="setGutIntensity(4)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:13px;cursor:pointer">4</button>
+            <button id="gint-5" onclick="setGutIntensity(5)" style="flex:1;padding:8px;border-radius:9px;border:0.5px solid var(--cb);background:none;color:var(--text2);font-size:13px;cursor:pointer">5</button>
           </div>
         </div>
         <div class="ig"><label class="il">Когда появилось после еды?</label>
@@ -2314,35 +2325,30 @@ ${goodLog}
 ПРОДУКТЫ В ХОЛОДИЛЬНИКЕ: ${S.products.slice(0,20).map(p=>p.name).join(', ')}
 
 ЗАДАЧА:
-1. Определи УРОВЕНЬ проблемы (продукт / группа нутриентов / количество / время суток / скорость еды / стресс / сочетание продуктов)
+1. Определи УРОВЕНЬ проблемы (продукт / нутриент / количество / время / скорость / стресс / сочетание)
 2. Выдвини конкретные гипотезы с объяснением
-3. Предложи что проверить и как (элиминация, тест)
-4. Укажи подозреваемые продукты или паттерны для отслеживания
+3. Предложи что проверить и как
+4. Укажи подозреваемые продукты или паттерны
 5. Если симптомы серьёзные или частые — рекомендуй врача
 
-Ответь в формате JSON:
+ТОЛЬКО JSON:
 {"summary":"краткий вывод","level":"продукт|нутриент|количество|скорость|стресс|время|сочетание","hypotheses":[{"text":"гипотеза","confidence":"высокая|средняя|низкая","action":"что делать"}],"suspects":[{"name":"название","type":"product|nutrient|pattern","hypothesis":"почему подозревается"}],"doctorAdvice":true|false,"doctorReason":"почему к врачу если true"}`}],
   'Ты диетолог-гастроэнтеролог. Только JSON без markdown.',1200);
 
   try{
     const data=JSON.parse((resp||'').replace(/```json|```/g,'').trim());
-
-    // Обновляем список подозреваемых
     if(data.suspects?.length){
       if(!S.gutSuspects)S.gutSuspects=[];
       data.suspects.forEach(s=>{
         const existing=S.gutSuspects.find(x=>x.name.toLowerCase()===s.name.toLowerCase());
-        if(!existing){
-          S.gutSuspects.push({name:s.name,type:s.type,hypothesis:s.hypothesis,observations:[],status:'suspect',addedAt:new Date().toISOString()});
-        }
+        if(!existing)S.gutSuspects.push({name:s.name,type:s.type,hypothesis:s.hypothesis,observations:[],status:'suspect',addedAt:new Date().toISOString()});
       });
       save();
       renderGutSuspects();
     }
-
     let html=`<div style="font-size:13px;line-height:1.7">`;
     html+=`<div style="font-weight:600;margin-bottom:8px">${esc(data.summary||'')}</div>`;
-    html+=`<div style="font-size:11px;color:var(--text2);margin-bottom:10px">Уровень проблемы: ${esc(data.level||'')}</div>`;
+    html+=`<div style="font-size:11px;color:var(--text2);margin-bottom:10px">Уровень: ${esc(data.level||'')}</div>`;
     if(data.hypotheses?.length){
       html+=`<div style="font-weight:500;margin-bottom:6px">Гипотезы:</div>`;
       data.hypotheses.forEach(h=>{
@@ -2565,57 +2571,65 @@ async function generateWeekMenu(){
 ━━━ ПРОДУКТЫ (сортированы по сроку годности) ━━━
 ${prods}
 
-━━━ НУТРИЕНТНЫЕ ЦЕЛИ ━━━
-ИТОГО В ДЕНЬ: ${g.kcal}ккал | Б${g.prot}г | Ж${g.fat}г | У${g.carb}г | клетчатка ${g.fiber||30}г
-НА ОДИН ПРИЁМ (${mealCount} приёма/ов): ~${kcalPerMeal}ккал | Б~${protPerMeal}г | Ж~${fatPerMeal}г | У~${carbPerMeal}г
-Распредели КБЖУ равномерно между всеми ${mealCount} приёмами пищи.
-Насыщ./ненасыщ. жиры: ${g.fa} | Сложн./простые углеводы: ${g.ca}
+━━━ ОБЯЗАТЕЛЬНЫЕ ТРЕБОВАНИЯ К КАЖДОМУ ДНЮ ━━━
+⚠ ЭТО НЕ РЕКОМЕНДАЦИИ — ЭТО ЖЁСТКИЕ ТРЕБОВАНИЯ:
+
+1. КБЖУ — строго ±5% от целевых:
+   ИТОГО В ДЕНЬ: ${g.kcal}ккал (допустимо ${Math.round(g.kcal*0.95)}-${Math.round(g.kcal*1.05)})
+   Белок: ${g.prot}г (мин. ${Math.round(g.prot*0.95)}г)
+   Жиры: ${g.fat}г (${Math.round(g.fat*0.95)}-${Math.round(g.fat*1.05)}г)
+   Углеводы: ${g.carb}г (мин. ${Math.round(g.carb*0.95)}г)
+   Клетчатка: мин. ${g.fiber||30}г
+   НА ОДИН ПРИЁМ (~${mealCount}): ~${kcalPerMeal}ккал | Б~${protPerMeal}г | Ж~${fatPerMeal}г | У~${carbPerMeal}г
+   Насыщ./ненасыщ. жиры: ${g.fa} | Сложн./простые углеводы: ${g.ca}
+
+2. ПОСТОЯННЫЕ ПОЖЕЛАНИЯ (выполнять КАЖДЫЙ ДЕНЬ без исключений):
+   "${g.prefs||'нет'}"
+
+3. ПРОДУКТЫ ПО СРОКАМ: сначала продукты с ближайшим сроком годности
+
+4. SELF-CHECK: перед финализацией каждого дня посчитай сумму ккал/Б/Ж/У всех приёмов.
+   Если отклонение > 5% — скорректируй граммовку.
 
 ━━━ НУТРИЕНТНАЯ ПОЛНОЦЕННОСТЬ ━━━
-За неделю обязательно обеспечь:
-- Витамины A, D, E, K (жирорастворимые) — сочетай с жирами в том же приёме
-- Витамин C — сочетай с источниками железа, разрушается при нагреве
-- Железо — с витамином C для усвоения, НЕ с кальцием и кофе
-- Кальций — НЕ с железом, шпинатом, свёклой (оксалаты)
-- Омега-3 — если есть рыба, льняное/конопляное масло, семена чиа
-- Клетчатка — не менее ${g.fiber}г/день (пребиотик для микробиома)
-- Пробиотики (йогурт, кефир, творог) — с клетчаткой для синбиотического эффекта
+За неделю обязательно: витамины A,D,E,K (с жирами), C (с железом, не нагревать),
+железо (с витC, не с кальцием), кальций (не с железом/оксалатами),
+омега-3 (рыба/лён/чиа), клетчатка мин. ${g.fiber||30}г/день.
 
-━━━ СИНЕРГИЯ И КОНФЛИКТЫ НУТРИЕНТОВ ━━━
-✓ Витамин C + железо → усвоение Fe ×2-3
-✓ Витамин D + жиры → жирорастворимый, нужны жиры
-✓ Куркума + чёрный перец → усвоение куркумина ×20
-✓ Пробиотики + клетчатка → синбиотический эффект
-✗ Кальций + железо → конкурируют, разноси по приёмам пищи
-✗ Кофе/чай + железо → снижают усвоение, пить через 1ч после еды
-✗ Шпинат/свёкла (оксалаты) + кальций → не сочетай
-✗ Бобовые/злаки (фитаты) + Fe, Zn, Ca → замачивание снижает фитаты на 50%
+━━━ СИНЕРГИЯ И КОНФЛИКТЫ ━━━
+✓ витC+Fe ×2-3 | ✓ витD+жиры | ✓ куркума+перец ×20
+✗ Ca+Fe → разноси | ✗ кофе/чай+Fe → через 1ч
+✗ оксалаты+Ca → не сочетай | ✗ фитаты → замачивание -50%
 
 ━━━ УСВОЯЕМОСТЬ ━━━
-- Жиры из круп (гречка, овсянка, рис): усваивается 60-80% из-за клетчатки/фитатов
-- Жиры из орехов и семян: ~80% из-за клеточных стенок
-- Растительный белок: 60-85%, животный белок: 90-95%
-- Сахарозаменители (эритрит, стевия, сукралоза): 0 ккал, 0 углеводов
-- Чистые углеводы = общие углеводы − клетчатка
+Жиры из круп 60-80%, орехи ~80%. Белок: растит. 60-85%, живот. 90-95%.
+Сахарозаменители = 0 ккал/углеводов. Чистые У = общие − клетчатка.
 ${awayInfo}
 ━━━ ТРЕНИРОВКИ ━━━
 Дни: ${woDays}, время: ~${woTime}
-- За 2-3ч до: сложные углеводы + немного белка
-- 30-60мин после: белок (20-30г) + быстрые углеводы (30-50г)
+ДО тренировки (за 2-3ч): сложные У ${Math.round(carbPerMeal*1.3)}г+ | белок
+ПОСЛЕ (30-60мин): белок ${Math.round(protPerMeal*1.2)}г+ | быстрые У
+workoutNote: конкретная граммовка, не общие слова.
 
-━━━ ПРЕДПОЧТЕНИЯ И ИСТОРИЯ ━━━
-Любимые блюда (включать чаще): ${liked}
-Стоп-лист: ${disliked}
+━━━ ОСТАЛЬНЫЕ ПРЕДПОЧТЕНИЯ ━━━
+Любимые: ${liked} | Стоп-лист: ${disliked}
 Пожелания к дням: ${wishes||'нет'}
-Постоянные пожелания: ${g.prefs||'нет'}
 ${yazio}${yazioProfile}
-ЖКТ-проблемы (учти при планировании): ${gutBad}
-ПОДТВЕРЖДЁННЫЕ НЕПЕРЕНОСИМОСТИ (исключить полностью): ${gutIntolerances}
-ПОДОЗРЕВАЕМЫЕ (включать осторожно, малыми порциями, с предупреждением в warnings): ${gutSuspects}
+ЖКТ: ${gutBad}
+НЕПЕРЕНОСИМОСТИ (исключить): ${gutIntolerances}
+ПОДОЗРЕВАЕМЫЕ (осторожно+warnings): ${gutSuspects}
+
+━━━ PREPNOTE — КОНКРЕТНЫЕ ЦИФРЫ ━━━
+- Мясо/рыба из морозилки: за 18-24ч в холодильник
+- Стейк из холодильника: за 30-40 мин до готовки
+- Маринование: курица 2-4ч, говядина 4-8ч, рыба 30-60мин
+- Бобовые: чечевица 4-6ч, нут/фасоль 8-12ч
+- Крупы: 30-60мин | Разморозка в холодильнике > раковина
+Пусто если ничего не нужно заранее.
 
 ━━━ ФОРМАТ ОТВЕТА ━━━
-ТОЛЬКО JSON без markdown. Включай ТОЛЬКО дни начиная с dayIndex=${todayIdx}:
-{"days":[{"dayIndex":${todayIdx},"meals":{"${meals[0]}":{"name":"Название (ингредиент1 XXг, ингредиент2 XXг)","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=2?`,"${meals[1]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${mealCount>=3?`,"${meals[2]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${mealCount>=4?`,"${meals[3]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}}, "macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"reason":"какие нутриенты/витамины закрывает этот день","prepNote":"Что подготовить заранее. Пусто если не нужно.","workoutNote":"Структура питания в день тренировки. Пусто если нет.","warnings":[]}],"shopping":["только если критически не хватает нутриентов"]}`
+ТОЛЬКО JSON без markdown. Дни начиная с dayIndex=${todayIdx}:
+{"days":[{"dayIndex":${todayIdx},"meals":{"${meals[0]}":{"name":"Название (ингредиент1 XXг, ингредиент2 XXг)","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=2?`,"${meals[1]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${mealCount>=3?`,"${meals[2]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${mealCount>=4?`,"${meals[3]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}}, "macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"macrosCheck":"итого ккал/Б/Ж/У=X/X/X/X отклонение X%","reason":"нутриенты/витамины дня","prepNote":"конкретные временны́е указания или пусто","workoutNote":"конкретная граммовка или пусто","warnings":[]}],"shopping":["только при критической нехватке нутриентов"]}`
 
   const resp=await claude([{role:'user',content:prompt}],'Ты диетолог-нутрициолог. Только JSON без markdown.',4000);
   if(!resp||typeof resp==='object'){
@@ -3410,8 +3424,10 @@ function filterMappingItems(q){
 async function startYazioDeepAnalysis(){
   if(!S.yazioData){alert('Сначала загрузи данные Yazio');return;}
   if(!S.settings.apikey){alert('Укажи API ключ');return;}
+  const btn=document.querySelector('button[onclick="startYazioDeepAnalysis()"]');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Анализирую...';}
   const el=document.getElementById('yazioInfo');
-  if(el)el.innerHTML=`<div style="font-size:12px;color:var(--text2)"><span class="spin"></span> Claude анализирует 3 месяца питания — это займёт ~30 секунд...</div>`;
+  if(el)el.innerHTML=`<div style="font-size:12px;color:var(--text2)"><span class="spin"></span> Claude анализирует историю питания — ~30 секунд...</div>`;
 
   const diary=S.yazioData.diary||[];
   const dishes=S.yazioData.frequent_dishes||[];
@@ -3453,7 +3469,9 @@ async function startYazioDeepAnalysis(){
   try{
     const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
     S.yazioProfile=data;save();
-    if(el)el.innerHTML=`<div class="ng">✓ Анализ завершён — просмотри и скорректируй профиль</div>`;
+    const dateStr=new Date().toLocaleDateString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    if(el)el.innerHTML=`<div class="ng">✓ Анализ завершён ${dateStr} — просмотри и скорректируй профиль</div>`;
+    if(btn){btn.disabled=false;btn.innerHTML='🔬 Глубокий анализ истории (3 мес.)';}
     document.getElementById('btnShowProfile').style.display='block';
     // Предложение скорректировать КБЖУ если нужно
     if(data.kcal_suggestion&&Math.abs(data.kcal_suggestion-g.kcal)>150){
@@ -3467,6 +3485,7 @@ async function startYazioDeepAnalysis(){
     showYazioProfile();
   }catch(e){
     if(el)el.innerHTML=`<div class="nr">Ошибка разбора. Попробуй ещё раз.</div>`;
+    if(btn){btn.disabled=false;btn.innerHTML='🔬 Глубокий анализ истории (3 мес.)';}
   }
 }
 
@@ -3651,7 +3670,6 @@ async function addExtraMeal(dayIdx,mealType,wish){
 /* ── RECIPE ── */
 async function showRecipe(mealName,ingredients){
   if(!S.settings.apikey){alert('Укажи API ключ');return;}
-  // Открываем простой overlay поверх текущего экрана
   let overlay=document.getElementById('recipeOverlay');
   if(!overlay){
     overlay=document.createElement('div');
@@ -3660,6 +3678,21 @@ async function showRecipe(mealName,ingredients){
     document.querySelector('.app').appendChild(overlay);
   }
   overlay.style.display='flex';
+
+  // Проверяем кеш
+  if(!S.recipes)S.recipes={};
+  const cacheKey=mealName.toLowerCase().trim();
+  if(S.recipes[cacheKey]){
+    overlay.innerHTML=`
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <button onclick="document.getElementById('recipeOverlay').style.display='none'" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;padding:0">←</button>
+        <span style="font-size:16px;font-weight:500">${esc(mealName)}</span>
+      </div>
+      <div style="font-size:13px;line-height:1.8;white-space:pre-wrap;color:var(--text)">${esc(S.recipes[cacheKey])}</div>
+      <button onclick="document.getElementById('recipeOverlay').style.display='none'" class="bs" style="margin-top:8px">Закрыть</button>`;
+    return;
+  }
+
   overlay.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
       <button onclick="document.getElementById('recipeOverlay').style.display='none'" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;padding:0">←</button>
@@ -3669,16 +3702,21 @@ async function showRecipe(mealName,ingredients){
 
   const prods=S.products.map(p=>`${p.name} ${p.weight}г`).join(', ');
   const resp=await claude([{role:'user',content:`Напиши краткий рецепт для блюда "${mealName}".
-${ingredients?'Ингредиенты из базы: '+ingredients:'Продукты в холодильнике: '+prods}
-Формат: сначала список ингредиентов с граммовкой (подбери исходя из ${S.settings.kcal} ккал/день), затем пошаговое приготовление (3-6 шагов). Кратко и практично. По-русски.`}],
+${ingredients?'Ингредиенты: '+ingredients:'Продукты в холодильнике: '+prods}
+Формат: список ингредиентов с граммовкой, затем 3-6 шагов приготовления. Кратко и практично. По-русски.`}],
   'Ты повар-диетолог. Краткие практичные рецепты по-русски.',800);
+
+  const text=typeof resp==='string'?resp:'Не удалось загрузить рецепт.';
+  // Кешируем
+  S.recipes[cacheKey]=text;
+  save();
 
   overlay.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
       <button onclick="document.getElementById('recipeOverlay').style.display='none'" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;padding:0">←</button>
       <span style="font-size:16px;font-weight:500">${esc(mealName)}</span>
     </div>
-    <div style="font-size:13px;line-height:1.8;white-space:pre-wrap;color:var(--text)">${esc(typeof resp==='string'?resp:'Не удалось загрузить рецепт.')}</div>
+    <div style="font-size:13px;line-height:1.8;white-space:pre-wrap;color:var(--text)">${esc(text)}</div>
     <button onclick="document.getElementById('recipeOverlay').style.display='none'" class="bs" style="margin-top:8px">Закрыть</button>`;
 }
 
@@ -4295,7 +4333,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.3.0';
+const APP_VERSION='2.3.1';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
