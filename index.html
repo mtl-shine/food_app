@@ -4306,7 +4306,7 @@ function initSettingsUI(){
     if(el&&!el.innerHTML.trim()){
       el.innerHTML=`<div class="yz-ok">✓ Данные загружены: ${new Date(S.yazioData.synced_at).toLocaleDateString('ru-RU')} · ${S.yazioData.frequent_dishes?.length||0} блюд</div>`;
     }
-    // Показываем уведомление о pending маппинге
+    if(S.yazioProfile)document.getElementById('btnShowProfile').style.display='block';
     if(S._pendingMapping?.length){
       const el=document.getElementById('yazioDebug');
       if(el)el.innerHTML=`<div style="padding:8px;background:rgba(251,191,36,0.15);border:0.5px solid rgba(251,191,36,0.4);border-radius:8px;font-size:12px;cursor:pointer" onclick="showPendingMapping()">⚠ ${S._pendingMapping.length} блюд без сопоставления — нажми чтобы сопоставить и вычесть из холодильника</div>`;
@@ -4333,7 +4333,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.3.1';
+const APP_VERSION='2.3.2';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
