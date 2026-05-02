@@ -186,6 +186,23 @@ select option{background:#1a1a2e;color:var(--text)}
 <!-- MENU -->
 <div class="scr active" id="scr-menu"><div class="si" id="menuContent"></div></div>
 
+<!-- MENU WISHES -->
+<div class="scr" id="scr-menu-wishes">
+  <div class="si">
+    <div class="card">
+      <div class="ct">Пожелания к меню</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Напиши пожелания к конкретным дням или продуктам. Необязательно — можно оставить пустым.</div>
+      <textarea id="menuWishesInput" rows="6" placeholder="Например:
+Понедельник — хочу пасту с грибами
+Среда — использовать лосось
+Не хочу гречку в первые 3 дня
+В пятницу что-нибудь праздничное" style="width:100%;box-sizing:border-box;min-height:140px"></textarea>
+      <button class="bp" onclick="confirmAndGenerateMenu()" style="margin-top:12px">Составить меню</button>
+      <button class="bs" onclick="goBack()" style="margin-top:8px">Отмена</button>
+    </div>
+  </div>
+</div>
+
 <!-- AWAY PERIODS -->
 <div class="scr" id="scr-away">
   <div class="si">
@@ -1991,12 +2008,13 @@ function renderMenu(){
   const el=document.getElementById('menuContent');
   checkGutPending();
   if(!S.menu){
-    el.innerHTML=`<div class="es"><div class="ei">📅</div><div class="ett">Меню не составлено</div><div class="es2">Добавь продукты в холодильник, затем нажми кнопку.</div><button class="bp" onclick="generateWeekMenu()">Составить меню на неделю</button><button class="bs" onclick="subScreen('away','Вне дома','menu')" style="margin-top:8px">🏃 Приёмы вне дома</button></div>`;
+    el.innerHTML=`<div class="es"><div class="ei">📅</div><div class="ett">Меню не составлено</div><div class="es2">Добавь продукты в холодильник, затем нажми кнопку.</div><button class="bp" onclick="startGenerateMenu()">Составить меню на неделю</button><button class="bs" onclick="subScreen('away','Вне дома','menu')" style="margin-top:8px">🏃 Приёмы вне дома</button></div>`;
     return;
   }
   const days=weekDays();const meals=getMeals();
   // Кнопка "вне дома" в шапке
-  let html=`<div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+  let html=`<div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:8px">
+    <button onclick="startGenerateMenu()" style="background:none;border:0.5px solid var(--cb);color:var(--text2);padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer">↺ Пересоставить</button>
     <button onclick="subScreen('away','Вне дома','menu')" style="background:none;border:0.5px solid var(--cb);color:var(--text2);padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer">🏃 Вне дома</button>
   </div>`;
   days.forEach((d,i)=>{
@@ -2585,6 +2603,26 @@ function logActual(dayIdx,mealType){
 }
 
 /* ── GENERATE MENU ── */
+function startGenerateMenu(){
+  // Заполняем поле текущими пожеланиями если есть
+  const input=document.getElementById('menuWishesInput');
+  if(input)input.value=(S.wishes||[]).slice(-7).join('\n');
+  subScreen('menu-wishes','Пожелания к меню','menu');
+}
+
+async function confirmAndGenerateMenu(){
+  const input=document.getElementById('menuWishesInput');
+  const wishText=input?.value.trim()||'';
+  // Сохраняем новые пожелания
+  if(wishText){
+    const lines=wishText.split('\n').map(l=>l.trim()).filter(Boolean);
+    S.wishes=[...lines];
+    save();
+  }
+  goBack();
+  await generateWeekMenu();
+}
+
 async function generateWeekMenu(){
   if(!S.settings.apikey){alert('Укажи API ключ (⚙)');switchToSettings();return;}
   if(!S.products.length){alert('Добавь продукты в холодильник');return;}
@@ -2639,9 +2677,9 @@ async function generateWeekMenu(){
     const dayName=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i];
     const fasted=times['fasted_'+i];
     const time=times[i];
-    if(fasted)return`${dayName}: тренировка НАТОЩАК (до завтрака) — завтрак = посттрен (белок+углеводы)`;
-    if(time)return`${dayName}: тренировка в ${time} — приём за 2-3ч до = предтрен (сложные У), приём через 30-60мин после = посттрен (белок+быстрые У)`;
-    return`${dayName}: тренировка (время не указано)`;
+    if(fasted)return`${dayName} (dayIndex=${i}): тренировка НАТОЩАК (до завтрака) — завтрак = посттрен (белок+углеводы)`;
+    if(time)return`${dayName} (dayIndex=${i}): тренировка в ${time} — приём за 2-3ч до = предтрен (сложные У), приём через 30-60мин после = посттрен (белок+быстрые У)`;
+    return`${dayName} (dayIndex=${i}): тренировка (время не указано)`;
   }).join('\n')||'нет тренировок';
   const wishes=S.wishes.slice(-10).map(w=>`• ${w}`).join('\n');
   const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-10).map(g=>{
@@ -2733,6 +2771,7 @@ ${woInfo}
 - Если тренировка НАТОЩАК: завтрак = посттрен, предтрена нет
 - НЕЛЬЗЯ: поместить предтрен И посттрен в один приём
 - НЕЛЬЗЯ: называть завтрак "предтреном" если тренировка через 4+ часов
+- В НЕ-тренировочные дни: workoutNote = "" (пустая строка, никаких упоминаний тренировок)
 - workoutNote: КОНКРЕТНО какой приём предтрен/посттрен с граммовкой
 
 ━━━ ОСТАЛЬНЫЕ ПРЕДПОЧТЕНИЯ ━━━
@@ -2774,7 +2813,7 @@ ${yazio}${yazioProfile}
     data.days.forEach(d=>{meals.forEach(t=>{const m=d.meals?.[t];if(m?.name&&!S.dishes.find(x=>x.name.toLowerCase()===m.name.toLowerCase())){S.dishes.push({id:Date.now()+Math.random(),name:m.name,ingredients:'',kcal:m.kcal||0,prot:m.prot||0,fat:m.fat||0,carb:m.carb||0,note:'',liked:false,disliked:false});}});});
     save();renderMenu();
   }catch(e){
-    document.getElementById('menuContent').innerHTML=`<div class="si"><div class="nr">Ошибка разбора ответа.</div><button class="bp" onclick="generateWeekMenu()">Повторить</button></div>`;
+    document.getElementById('menuContent').innerHTML=`<div class="si"><div class="nr">Ошибка разбора ответа.</div><button class="bp" onclick="generateWeekMenu()">Повторить</button><button class="bs" onclick="startGenerateMenu()" style="margin-top:8px">Изменить пожелания</button></div>`;
   }
 }
 
@@ -4585,7 +4624,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.4.2';
+const APP_VERSION='2.4.4';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
