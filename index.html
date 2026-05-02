@@ -204,11 +204,33 @@ select option{background:#1a1a2e;color:var(--text)}
   </div>
 </div>
 
+<!-- SHOPPING LIST -->
+<div class="scr" id="scr-shopping">
+  <div class="si">
+    <div class="card">
+      <div class="sh"><span class="ct" style="margin:0">🛒 Список покупок</span>
+        <button class="addb" onclick="refreshShoppingList()">↺ обновить</button>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Продукты необходимые для восполнения нутриентов которых не хватает в холодильнике. Формируется автоматически из меню недели.</div>
+      <div id="shoppingList"><p style="font-size:13px;color:var(--text2)">Составь меню на неделю — список покупок сформируется автоматически.</p></div>
+    </div>
+    <div class="card" id="shoppingAnalyzeCard">
+      <div class="ct">Анализ нутриентов</div>
+      <div id="shoppingAnalyze" style="font-size:13px;color:var(--text2)">Нажми «↺ обновить» чтобы Claude проанализировал недостающие нутриенты.</div>
+    </div>
+  </div>
+</div>
+
 <!-- PRODUCTS -->
 <div class="scr" id="scr-products">
   <div class="si">
     <div class="card">
-      <div class="sh"><span class="ct" style="margin:0">В холодильнике</span><button class="addb" onclick="showAddProduct()">+ добавить</button></div>
+      <div class="sh"><span class="ct" style="margin:0">В холодильнике</span>
+        <div style="display:flex;gap:6px">
+          <button class="addb" onclick="subScreen('shopping','Список покупок','products')" style="background:none;border:0.5px solid var(--cb);color:var(--text2)">🛒</button>
+          <button class="addb" onclick="showAddProduct()">+ добавить</button>
+        </div>
+      </div>
       <div class="sx"><span class="sxi">🔍</span><input type="text" id="productsSearch" placeholder="Поиск в холодильнике..." oninput="renderProducts()"></div>
       <div id="productsList"></div>
     </div>
@@ -329,8 +351,9 @@ select option{background:#1a1a2e;color:var(--text)}
         <div class="wd-grid" id="wdGrid"></div>
       </div>
       <div class="ig">
-        <label class="il">Время тренировки (примерно)</label>
-        <input type="text" id="s-wtime" placeholder="18:00">
+        <label class="il">Время тренировки по дням</label>
+        <div id="wdTimeGrid" style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
+        <div style="font-size:11px;color:var(--text2);margin-top:4px">Оставь пустым если тренировка до завтрака (натощак)</div>
       </div>
     </div>
     <div class="card">
@@ -369,7 +392,6 @@ select option{background:#1a1a2e;color:var(--text)}
       <div id="yazioInfo"></div>
       <div id="yazioDebug" style="font-size:11px;color:var(--text2);margin-top:4px"></div>
       <button class="bs" onclick="loadYazio()" style="margin-top:4px">↺ Загрузить данные Yazio</button>
-      <button class="bs" onclick="restoreDeducted()" style="margin-top:4px;color:var(--acc2);border-color:rgba(251,191,36,0.4)">↩ Вернуть вычтенное из Yazio</button>
       <button class="bs" onclick="reviewYazioMapping(false)" style="margin-top:4px;font-size:11px">📋 Пересмотреть все сопоставления</button>
       <button class="bs" onclick="reviewYazioMapping(true)" style="margin-top:4px;font-size:11px">❓ Пересмотреть отсутствующие продукты</button>
       <button class="bs" onclick="startYazioDeepAnalysis()" style="margin-top:6px;border-color:rgba(129,140,248,0.4);color:#818cf8">🔬 Глубокий анализ истории (3 мес.)</button>
@@ -879,7 +901,7 @@ let S={
   settings:{
     kcal:2000,prot:120,fat:65,carb:220,fiber:30,
     fa:'30/70',ca:'70/30',prefs:'',apikey:'',
-    mealCount:2,workoutDays:[],workoutTime:'18:00'
+    mealCount:2,workoutDays:[],workoutTime:'18:00',workoutTimes:{}
   },
   chatHistory:[],wishes:[],
   dishes:[],dishFilter:'all',
@@ -1008,6 +1030,7 @@ function subScreen(name,title,prev){
   }
   show(name);
   if(name==='away')renderAwayList();
+  if(name==='shopping')renderShoppingList();
 }
 
 function switchToSettings(){
@@ -1030,6 +1053,82 @@ function switchToSettings(){
 }
 function toCalc(){subScreen('calc','Калькулятор КБЖУ','settings');}
 function showAddProduct(){subScreen('add-product','Добавить продукт','products');}
+
+function renderShoppingList(){
+  const el=document.getElementById('shoppingList');
+  if(!el)return;
+  // Собираем shopping из всех дней меню
+  const items=[];
+  if(S.menu){
+    Object.values(S.menu).forEach(d=>{
+      (d.shopping||[]).forEach(item=>{
+        if(item&&!items.includes(item))items.push(item);
+      });
+    });
+  }
+  // Добавляем из поля shopping на уровне меню
+  (S.shoppingList||[]).forEach(item=>{if(!items.includes(item))items.push(item);});
+
+  if(!items.length){
+    el.innerHTML='<p style="font-size:13px;color:var(--text2)">Список покупок пуст — меню не составлено или всех нутриентов достаточно.</p>';
+    return;
+  }
+  el.innerHTML=items.map((item,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--cb)">
+    <input type="checkbox" id="shop-${i}" style="width:16px;height:16px;cursor:pointer" onchange="this.nextElementSibling.style.textDecoration=this.checked?'line-through':'none'">
+    <label for="shop-${i}" style="font-size:13px;flex:1;cursor:pointer">${esc(item)}</label>
+  </div>`).join('');
+}
+
+async function refreshShoppingList(){
+  if(!S.settings.apikey){alert('Нужен API ключ');return;}
+  const btn=document.querySelector('#scr-shopping .addb');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>';}
+  const analyzeEl=document.getElementById('shoppingAnalyze');
+  if(analyzeEl)analyzeEl.innerHTML='<span class="spin"></span> Анализирую нутриенты...';
+
+  const today=new Date().toISOString().split('T')[0];
+  const prods=S.products.map(p=>`${p.name} ${p.weight}г (до ${p.expiry||'?'}): ${p.kcal||0}ккал, Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}${p.vitC?`,витC${p.vitC}`:''}${p.fe?`,Fe${p.fe}`:''}${p.ca?`,Ca${p.ca}`:''}${p.vitD?`,витD${p.vitD}`:''}${p.vitB12?`,B12_${p.vitB12}`:''}${p.mg?`,Mg${p.mg}`:''}${p.fiber?`,клетч${p.fiber}`:''}${p.fatSat?`,нас.ж${p.fatSat}`:''}`).join('\n');
+  const g=S.settings;
+
+  const resp=await claude([{role:'user',content:`Проанализируй холодильник и определи каких нутриентов не хватает для достижения целей.
+
+ЦЕЛИ НА ДЕНЬ: ${g.kcal}ккал, Б${g.prot}г, Ж${g.fat}г, У${g.carb}г, клетч${g.fiber||30}г
+
+ПРОДУКТЫ В ХОЛОДИЛЬНИКЕ:
+${prods}
+
+Определи:
+1. Каких витаминов/минералов/нутриентов не хватает или мало (витD, витC, Fe, Ca, омега-3, клетчатка и т.д.)
+2. Минимальный список покупок для восполнения — только то что действительно необходимо
+3. Не предлагай то что уже есть в достаточном количестве
+
+ТОЛЬКО JSON:
+{"analysis":"краткий анализ нутриентов","gaps":["нутриент — почему не хватает"],"shopping":["конкретный продукт — зачем и примерное количество"]}`}],
+  'Ты диетолог-нутрициолог. Только JSON.',800);
+
+  if(btn){btn.disabled=false;btn.innerHTML='↺ обновить';}
+
+  try{
+    const data=JSON.parse((resp||'').replace(/```json|```/g,'').trim());
+    if(!S.shoppingList)S.shoppingList=[];
+    // Добавляем новые позиции не дублируя
+    (data.shopping||[]).forEach(item=>{
+      if(!S.shoppingList.includes(item))S.shoppingList.push(item);
+    });
+    save();
+    renderShoppingList();
+    if(analyzeEl){
+      let html=`<div style="font-size:13px;margin-bottom:8px">${esc(data.analysis||'')}</div>`;
+      if(data.gaps?.length){
+        html+=`<div style="font-size:12px;color:var(--acc);margin-bottom:4px">Не хватает:</div>`;
+        data.gaps.forEach(g=>html+=`<div style="font-size:12px;color:var(--text2);padding:2px 0">• ${esc(g)}</div>`);
+      }
+      analyzeEl.innerHTML=html;
+    }
+  }catch(e){
+    if(analyzeEl)analyzeEl.innerHTML=`<div style="font-size:13px">${esc(resp||'Ошибка анализа')}</div>`;
+  }
+}
 
 /* ── ИКОНКИ ── */
 function getProductIcon(name){
@@ -2501,8 +2600,20 @@ async function generateWeekMenu(){
   const fatPerMeal=Math.round(g.fat/mealCount);
   const carbPerMeal=Math.round(g.carb/mealCount);
   const fiberPerMeal=Math.round((g.fiber||30)/mealCount);
-  const prods=S.products.map(p=>{
-    const base=`• ${p.name}: ${p.weight||'?'}г, до ${p.expiry||'?'}, ${p.kcal||0}ккал/100г, Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}`;
+  // Сортируем: просроченные первыми, потом по сроку годности
+  const sortedProducts=[...S.products].sort((a,b)=>{
+    const today=new Date().toISOString().split('T')[0];
+    const aExp=a.expiry||'9999';const bExp=b.expiry||'9999';
+    const aExpired=aExp<today;const bExpired=bExp<today;
+    if(aExpired&&!bExpired)return -1;
+    if(!aExpired&&bExpired)return 1;
+    return aExp.localeCompare(bExp);
+  });
+  const todayStr=new Date().toISOString().split('T')[0];
+  const prods=sortedProducts.map(p=>{
+    const expired=p.expiry&&p.expiry<todayStr;
+    const prefix=expired?'⚠ ПРОСРОЧЕН — использовать немедленно или проверить: ':'• ';
+    const base=`${prefix}${p.name}: ${p.weight||'?'}г, до ${p.expiry||'?'}${expired?' (просрочен на '+Math.floor((new Date(todayStr)-new Date(p.expiry))/864e5)+'д)':''}, ${p.kcal||0}ккал/100г, Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}`;
     const extra=[];
     if(p.fatSat!=null)extra.push(`нас.ж${p.fatSat}`);
     if(p.fatMono!=null)extra.push(`моно${p.fatMono}`);
@@ -2522,8 +2633,16 @@ async function generateWeekMenu(){
   }).join('\n');
   const liked=S.dishes.filter(d=>d.liked).map(d=>d.name).join(', ')||'нет';
   const disliked=S.dishes.filter(d=>d.disliked).map(d=>d.name).join(', ')||'нет';
-  const woDays=S.settings.workoutDays?.map(i=>DS[i]).join(', ')||'нет';
-  const woTime=S.settings.workoutTime||'18:00';
+  // Формируем информацию о тренировках по дням
+  const times=g.workoutTimes||{};
+  const woInfo=(g.workoutDays||[]).map(i=>{
+    const dayName=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i];
+    const fasted=times['fasted_'+i];
+    const time=times[i];
+    if(fasted)return`${dayName}: тренировка НАТОЩАК (до завтрака) — завтрак = посттрен (белок+углеводы)`;
+    if(time)return`${dayName}: тренировка в ${time} — приём за 2-3ч до = предтрен (сложные У), приём через 30-60мин после = посттрен (белок+быстрые У)`;
+    return`${dayName}: тренировка (время не указано)`;
+  }).join('\n')||'нет тренировок';
   const wishes=S.wishes.slice(-10).map(w=>`• ${w}`).join('\n');
   const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-10).map(g=>{
     const parts=[`${g.meal}: ${g.note||'дискомфорт'}`];
@@ -2605,11 +2724,16 @@ ${prods}
 Жиры из круп 60-80%, орехи ~80%. Белок: растит. 60-85%, живот. 90-95%.
 Сахарозаменители = 0 ккал/углеводов. Чистые У = общие − клетчатка.
 ${awayInfo}
-━━━ ТРЕНИРОВКИ ━━━
-Дни: ${woDays}, время: ~${woTime}
-ДО тренировки (за 2-3ч): сложные У ${Math.round(carbPerMeal*1.3)}г+ | белок
-ПОСЛЕ (30-60мин): белок ${Math.round(protPerMeal*1.2)}г+ | быстрые У
-workoutNote: конкретная граммовка, не общие слова.
+━━━ ТРЕНИРОВКИ (СТРОГО) ━━━
+${woInfo}
+
+ПРАВИЛА ПРЕДТРЕН/ПОСТТРЕН (обязательны):
+- Предтрен = приём ближайший ПЕРЕД тренировкой по времени суток (за 2-3ч): сложные У ${Math.round(carbPerMeal*1.3)}г+, белок, мало жиров
+- Посттрен = приём ближайший ПОСЛЕ тренировки по времени суток (до 1ч): белок ${Math.round(protPerMeal*1.2)}г+, быстрые У 30-50г
+- Если тренировка НАТОЩАК: завтрак = посттрен, предтрена нет
+- НЕЛЬЗЯ: поместить предтрен И посттрен в один приём
+- НЕЛЬЗЯ: называть завтрак "предтреном" если тренировка через 4+ часов
+- workoutNote: КОНКРЕТНО какой приём предтрен/посттрен с граммовкой
 
 ━━━ ОСТАЛЬНЫЕ ПРЕДПОЧТЕНИЯ ━━━
 Любимые: ${liked} | Стоп-лист: ${disliked}
@@ -2639,7 +2763,13 @@ ${yazio}${yazioProfile}
     const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
     S.menu={};
     data.days.forEach(d=>{S.menu[d.dayIndex]={...d.meals,macros:d.macros,reason:d.reason,prepNote:d.prepNote||'',workoutNote:d.workoutNote,warnings:d.warnings||[]};});
-    S.shopping=data.shopping||[];S.shoppingChecked={};
+    S.shopping=data.shopping||[];
+    // Сохраняем рекомендации покупок из меню
+    if(data.shopping?.length){
+      if(!S.shoppingList)S.shoppingList=[];
+      data.shopping.forEach(item=>{if(item&&!S.shoppingList.includes(item))S.shoppingList.push(item);});
+    }
+    S.shoppingChecked={};
     // Авто-добавление блюд в список
     data.days.forEach(d=>{meals.forEach(t=>{const m=d.meals?.[t];if(m?.name&&!S.dishes.find(x=>x.name.toLowerCase()===m.name.toLowerCase())){S.dishes.push({id:Date.now()+Math.random(),name:m.name,ingredients:'',kcal:m.kcal||0,prot:m.prot||0,fat:m.fat||0,carb:m.carb||0,note:'',liked:false,disliked:false});}});});
     save();renderMenu();
@@ -2650,36 +2780,96 @@ ${yazio}${yazioProfile}
 
 /* ── ADJUST DAY ── */
 async function adjustDay(idx){
-  const wish=document.getElementById('dayWish')?.value?.trim();if(!wish){alert('Напиши пожелание');return;}
-  const btn=document.getElementById('adjBtn');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>Пересоставляю...';}
+  const wish=document.getElementById('dayWish')?.value?.trim();
+  if(!wish){alert('Напиши пожелание');return;}
+  const btn=document.getElementById('adjBtn');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>Пересоставляю...';}
+
   const days=weekDays();const d=days[idx];const g=S.settings;const meals=getMeals();
-  const prods=S.products.map(p=>`${p.name}: до ${p.expiry||'?'}`).join(', ');
-  const disliked=S.dishes.filter(d=>d.disliked).map(d=>d.name).join(', ')||'нет';
+  const todayIdx=new Date().getDay()===0?6:new Date().getDay()-1;
   const wo=isWorkoutDay(idx);
-  const remain=Object.entries(S.menu||{}).filter(([k])=>parseInt(k)>=idx).map(([k,v])=>`День ${k}: ${meals.map(t=>v[t]?`${t}: ${v[t].name}`:'').filter(Boolean).join(', ')}`).join('\n');
-  const resp=await claude([{role:'user',content:`Пользователь хочет изменить ${d.label} (день ${idx}).
+
+  // Определяем расход продуктов до пересоставляемого дня
+  // Спрашиваем какой последний приём пищи сегодня уже был (если пересоставляем будущее)
+  let lastMealToday=null;
+  if(idx>todayIdx){
+    const mealOptions=['Ничего','Завтрак',...(meals.length>=2?['Обед']:[]),(meals.length>=2?'Ужин':'')].filter(Boolean);
+    const answer=prompt(`Какой последний приём пищи сегодня уже был?\n${mealOptions.map((m,i)=>`${i}: ${m}`).join('\n')}\n\nВведи номер:`);
+    const answerIdx=parseInt(answer);
+    if(!isNaN(answerIdx)&&answerIdx>0&&answerIdx<mealOptions.length){
+      lastMealToday=mealOptions[answerIdx];
+    }
+  }
+
+  // Считаем что уже израсходовано из холодильника (из меню между сегодня и пересоставляемым днём)
+  const plannedConsumption={};// {productName: totalGrams}
+  if(S.menu){
+    for(let i=todayIdx;i<idx;i++){
+      const dm=S.menu[i];if(!dm)continue;
+      const isToday=i===todayIdx;
+      meals.forEach(meal=>{
+        // Для сегодняшнего дня — пропускаем приёмы которые уже были
+        if(isToday&&lastMealToday){
+          const mealIdx=meals.indexOf(meal);
+          const lastIdx=meals.indexOf(lastMealToday);
+          if(mealIdx<=lastIdx)return;// уже было
+        }
+        const m=dm[meal];
+        if(m?.name){
+          // Парсим граммовку из названия блюда
+          const matches=[...m.name.matchAll(/(\w[\w\s]*?)\s+(\d+)г/g)];
+          matches.forEach(match=>{
+            const prod=match[1].trim();
+            const grams=parseInt(match[2]);
+            plannedConsumption[prod]=(plannedConsumption[prod]||0)+grams;
+          });
+        }
+      });
+    }
+  }
+
+  // Строим список продуктов с учётом планового расхода
+  const todayStr=new Date().toISOString().split('T')[0];
+  const adjustedProds=S.products.map(p=>{
+    const consumed=plannedConsumption[p.name]||0;
+    const remaining=Math.max(0,p.weight-consumed);
+    if(remaining<=0)return null;
+    const expired=p.expiry&&p.expiry<todayStr;
+    return`${expired?'⚠ ПРОСРОЧЕН: ':''}${p.name}: ${remaining}г доступно (из ${p.weight}г, запланировано -${consumed}г), до ${p.expiry||'?'}`;
+  }).filter(Boolean).join('\n');
+
+  const disliked=S.dishes.filter(d=>d.disliked).map(d=>d.name).join(', ')||'нет';
+  const gutIntolerances=(S.gutIntolerances||[]).map(i=>i.name).join(', ')||'нет';
+
+  const resp=await claude([{role:'user',content:`Пересоставь ${d.label} (dayIndex=${idx}).
 Пожелание: "${wish}"
-Продукты: ${prods}
-Стоп: ${disliked}
-Цели: ${g.kcal}ккал, Б${g.prot}/Ж${g.fat}/У${g.carb}г
-Приёмов пищи: ${meals.length} (${meals.join(', ')})
-${wo?`День тренировки! Время ~${g.workoutTime}. Учти предтрен/посттрен питание.`:''}
-Жиры из круп усваиваются на 20-40% хуже.
-Текущее меню с дня ${idx}:
-${remain}
 
-ЛОГИКА ОБРАБОТКИ ПОЖЕЛАНИЯ:
-1. Если пожелание вписывается в КБЖУ — просто включи в меню.
-2. Если не вписывается, но можно скорректировать день — предложи что убрать или уменьшить чтобы уложиться, добавь это в warnings.
-3. Если совсем не вписывается — честно скажи насколько выходит за рамки (в warnings), предложи варианты: облегчённую версию блюда, перенос на день тренировки (там можно больше калорий), или просто съесть без компенсации (одно отступление не ломает рацион). Не корректируй другие дни недели чтобы "отработать" — это нездоровый подход.
+ПРОДУКТЫ с учётом планового расхода предыдущих дней:
+${adjustedProds}
 
-Ответь ТОЛЬКО JSON: {"updatedDays":[{"dayIndex":${idx},"meals":{...},"macros":{...},"reason":"...","workoutNote":"...","warnings":[]}],"globalWarnings":[]}`}],
+ЦЕЛИ: ${g.kcal}ккал (±5%), Б${g.prot}г, Ж${g.fat}г, У${g.carb}г
+НА ПРИЁМ (~${meals.length}): ~${Math.round(g.kcal/meals.length)}ккал
+ПРИЁМОВ: ${meals.length} (${meals.join(', ')})
+СТОП: ${disliked}
+НЕПЕРЕНОСИМОСТИ: ${gutIntolerances}
+ПОСТОЯННЫЕ ПОЖЕЛАНИЯ: "${g.prefs||'нет'}"
+${wo?`ТРЕНИРОВКА в ${g.workoutTime} — учти предтрен/посттрен.`:''}
+
+ЛОГИКА:
+1. Если пожелание вписывается — включи.
+2. Если нет — предложи облегчённую версию или укажи в warnings.
+3. Не корректируй другие дни.
+
+ТОЛЬКО JSON: {"updatedDays":[{"dayIndex":${idx},"meals":{"${meals[0]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}${meals[1]?`,"${meals[1]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${meals[2]?`,"${meals[2]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${meals[3]?`,"${meals[3]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}}, "macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"reason":"...","prepNote":"...","workoutNote":"...","warnings":[]}],"globalWarnings":[]}`}],
   'Ты диетолог. Только JSON.',2000);
+
   if(btn){btn.disabled=false;btn.innerHTML='Пересоставить этот день';}
   if(!resp||typeof resp==='object'){alert('Ошибка: '+(resp?.error||'нет ответа'));return;}
   try{
     const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
-    data.updatedDays.forEach(ud=>{S.menu[ud.dayIndex]={...ud.meals,macros:ud.macros,reason:ud.reason,workoutNote:ud.workoutNote,warnings:ud.warnings||[]};});
+    data.updatedDays.forEach(ud=>{
+      S.menu[ud.dayIndex]={...ud.meals,macros:ud.macros,reason:ud.reason,prepNote:ud.prepNote||'',workoutNote:ud.workoutNote,warnings:ud.warnings||[]};
+    });
     S.wishes.push(`${d.label}: ${wish}`);save();
     if(data.globalWarnings?.length)alert('⚠ '+data.globalWarnings.join('\n'));
     showDay(idx);
@@ -3110,11 +3300,10 @@ async function restoreDeducted(){
 async function showPendingMapping(){
   if(!S._pendingMapping?.length)return;
   const pending=S._pendingMapping;
-  S._pendingMapping=null;save();
   const d=document.getElementById('yazioDebug');
   if(d)d.innerHTML='';
-  await showMappingConfirmation(pending);
-  if(S.yazioData)await deductFromFridge(S.yazioData,[],false);
+  const saved=await showMappingConfirmation(pending);
+  if(saved&&S.yazioData)await deductFromFridge(S.yazioData,[],false);
 }
 
 function resetYazioMapping(){
@@ -3250,10 +3439,13 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
       save();
       addInfo('Открой Настройки → появится форма сопоставления');
     }else{
-      alert(`Сейчас должна появиться форма сопоставления (${unknown.length} блюд)`);
-      await showMappingConfirmation(unknown);
-      addInfo('Маппинг сохранён, применяю вычитание...');
-      await deductFromFridge(yazioData,[],false);
+      const saved=await showMappingConfirmation(unknown);
+      if(saved){
+        addInfo('Маппинг сохранён, применяю вычитание...');
+        await deductFromFridge(yazioData,[],false);
+      }else{
+        addInfo('Форма закрыта — открой Настройки чтобы вернуться к сопоставлению');
+      }
     }
     return;
   }
@@ -3339,11 +3531,15 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
 }
 
 async function showMappingConfirmation(unknown){
-  // Получаем предложения от Claude
+  // Получаем предложения от Claude (сохраняем в _pendingMapping вместе с блюдами)
   const fridgeList=S.products.map(p=>p.name).filter((v,i,a)=>a.indexOf(v)===i).join(', ');
   let suggestions={};
-  try{
-    const resp=await claude([{role:'user',content:`Сопоставь блюда из Yazio с продуктами в холодильнике.
+  // Если уже есть сохранённые предложения — используем их
+  if(S._pendingSuggestions){
+    suggestions=S._pendingSuggestions;
+  }else{
+    try{
+      const resp=await claude([{role:'user',content:`Сопоставь блюда из Yazio с продуктами в холодильнике.
 Названия могут быть на разных языках (немецкий, русский, английский) — ищи смысловое совпадение.
 Примеры: "Haferflocken"="Овсяные хлопья", "Putenbrust"="Индейка", "Quark"="Творог", "Hähnchenbrust"="Куриная грудка".
 Если нет подходящего — null.
@@ -3352,50 +3548,72 @@ async function showMappingConfirmation(unknown){
 Продукты в холодильнике: ${fridgeList}
 
 ТОЛЬКО JSON: {"matches":{"блюдо":"точное название из холодильника или null"}}`}],
-    'Только JSON без markdown.',1000);
-    if(resp&&typeof resp==='string'){
-      const d=JSON.parse(resp.replace(/```json|```/g,'').trim());
-      suggestions=d.matches||{};
-    }
-  }catch(e){}
+      'Только JSON без markdown.',1000);
+      if(resp&&typeof resp==='string'){
+        const d=JSON.parse(resp.replace(/```json|```/g,'').trim());
+        suggestions=d.matches||{};
+        // Сохраняем предложения чтобы не делать повторный запрос
+        S._pendingSuggestions=suggestions;save();
+      }
+    }catch(e){}
+  }
 
   return new Promise(resolve=>{
     const overlay=document.createElement('div');
     overlay.style.cssText='position:fixed;inset:0;background:rgba(26,26,46,0.97);z-index:100;overflow-y:auto;padding:16px;box-sizing:border-box';
 
-    // Опции отсортированы по алфавиту
     const prodNames=[...new Set(S.products.map(p=>p.name))].sort((a,b)=>a.localeCompare(b,'ru'));
-    const fridgeOpts='<option value="">— не в моём холодильнике —</option>'+
-      prodNames.map(name=>{
+
+    // Строим options с поиском — используем datalist для нативного поиска
+    const buildSelect=(idx,suggestedName)=>{
+      const prodNames2=[...new Set(S.products.map(p=>p.name))].sort((a,b)=>a.localeCompare(b,'ru'));
+      // datalist для поиска
+      const datalistId=`dl-map-${idx}`;
+      const opts=prodNames2.map(name=>{
         const items=S.products.filter(p=>p.name===name);
-        const openedCount=items.filter(p=>p.opened).length;
-        const totalWeight=items.reduce((s,p)=>s+p.weight,0);
-        const label=`${name} (${totalWeight}г${openedCount?`, 📭 ${openedCount} вскр.`:''})`;
-        return`<option value="${esc(name)}">${esc(label)}</option>`;
+        const total=items.reduce((s,p)=>s+p.weight,0);
+        const opened=items.filter(p=>p.opened).length;
+        return`<option value="${esc(name)}">${esc(name)} (${total}г${opened?` 📭${opened}`:''})`;
       }).join('');
+      return{datalistId, opts, value:suggestedName||''};
+    };
+
+    // Общий datalist для поиска продуктов
+    const allProdNames=[...new Set(S.products.map(p=>p.name))].sort((a,b)=>a.localeCompare(b,'ru'));
+    const commonDatalist=`<datalist id="dl-fridge-map">${allProdNames.map(name=>{
+      const items=S.products.filter(p=>p.name===name);
+      const total=items.reduce((s,p)=>s+p.weight,0);
+      const opened=items.filter(p=>p.opened).length;
+      return`<option value="${esc(name)}">${esc(name)} (${total}г${opened?` 📭${opened}`:''})`;
+    }).join('')}</datalist>`;
 
     let html=`
+      ${commonDatalist}
       <div style="font-size:15px;font-weight:600;margin-bottom:4px;padding-top:8px">Сопоставление блюд Yazio</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Claude предложил варианты — проверь и исправь если нужно.</div>
-      <input type="text" placeholder="🔍 Поиск блюда..." oninput="filterMappingItems(this.value)"
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Claude предложил варианты — проверь и исправь если нужно. Зелёная рамка = есть предложение.</div>
+      <input type="text" placeholder="🔍 Поиск по блюду Yazio..." oninput="filterMappingItems(this.value)"
         style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:8px;font-size:13px;box-sizing:border-box;margin-bottom:10px">
       <div id="mappingItems">`;
 
     unknown.forEach((u,i)=>{
       const sug=suggestions[u.normName];
       const hasSug=sug&&sug!=='null'&&sug!==null;
-      const opts=hasSug?fridgeOpts.replace(`value="${esc(sug)}"`,`value="${esc(sug)}" selected`):fridgeOpts;
       html+=`<div class="mapping-item" data-name="${esc(u.normName.toLowerCase())}"
         style="background:var(--cs);border-radius:10px;padding:10px;border:0.5px solid ${hasSug?'rgba(74,222,128,0.3)':'var(--cb)'};margin-bottom:8px">
         <div style="font-size:11px;color:var(--text2)">Из Yazio:</div>
         <div style="font-size:13px;font-weight:500;margin:2px 0 6px">${esc(u.normName)}</div>
-        <select id="map-${i}" style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:7px;font-size:12px">${opts}</select>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Продукт в холодильнике <span style="color:var(--text2);opacity:0.6">(начни вводить для поиска)</span>:</div>
+        <input type="text" id="map-${i}" list="dl-fridge-map" value="${esc(hasSug?sug:'')}"
+          placeholder="Начни вводить название продукта..."
+          style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:7px;font-size:12px;box-sizing:border-box">
+        <button onclick="document.getElementById('map-${i}').value=''"
+          style="font-size:10px;background:none;border:none;color:var(--text2);cursor:pointer;margin-top:2px;padding:0">× не в холодильнике</button>
       </div>`;
     });
 
     html+=`</div>
       <button id="mapSaveBtn" style="width:100%;background:#4ade80;border:none;color:#000;padding:13px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px">✓ Сохранить</button>
-      <button id="mapSkipBtn" style="width:100%;background:none;border:0.5px solid var(--cb);color:var(--text2);padding:11px;border-radius:10px;font-size:13px;cursor:pointer;margin-top:8px">Пропустить</button>`;
+      <button id="mapSkipBtn" style="width:100%;background:none;border:0.5px solid var(--cb);color:var(--text2);padding:11px;border-radius:10px;font-size:13px;cursor:pointer;margin-top:8px">Закрыть (вернуться позже)</button>`;
 
     overlay.innerHTML=html;
     overlay.dataset.overlay='1';
@@ -3406,10 +3624,18 @@ async function showMappingConfirmation(unknown){
         const sel=overlay.querySelector(`#map-${i}`);
         S.yazioMapping[u.normName]=sel?.value||null;
       });
-      S._pendingMapping=null;// очищаем после успешного сохранения
-      save();overlay.remove();resolve();
+      S._pendingMapping=null;
+      S._pendingSuggestions=null;
+      save();overlay.remove();resolve(true);// true = сохранено
     });
-    overlay.querySelector('#mapSkipBtn').addEventListener('click',()=>{overlay.remove();resolve();});
+
+    overlay.querySelector('#mapSkipBtn').addEventListener('click',()=>{
+      // Сохраняем pending чтобы форма появилась снова при открытии настроек
+      S._pendingMapping=unknown;
+      // Предложения уже сохранены в _pendingSuggestions
+      save();overlay.remove();resolve(false);// false = пропущено
+    });
+
     document.body.appendChild(overlay);
   });
 }
@@ -3975,13 +4201,39 @@ const WD_LABELS=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 function initWorkoutGrid(){
   const grid=document.getElementById('wdGrid');if(!grid)return;
   grid.innerHTML=WD_LABELS.map((l,i)=>`<button class="wd-btn${(S.settings.workoutDays||[]).includes(i)?' sel':''}" onclick="toggleWD(${i},this)">${l}</button>`).join('');
+  renderWdTimeGrid();
 }
+
+function renderWdTimeGrid(){
+  const grid=document.getElementById('wdTimeGrid');if(!grid)return;
+  const wdays=S.settings.workoutDays||[];
+  if(!wdays.length){grid.innerHTML='<div style="font-size:12px;color:var(--text2)">Выбери дни тренировок выше</div>';return;}
+  const times=S.settings.workoutTimes||{};
+  grid.innerHTML=wdays.sort((a,b)=>a-b).map(i=>`
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:13px;width:24px;color:var(--text2)">${WD_LABELS[i]}</span>
+      <input type="text" id="wt-${i}" value="${times[i]||''}" placeholder="до завтрака"
+        style="flex:1;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:6px 10px;font-size:13px"
+        oninput="S.settings.workoutTimes=S.settings.workoutTimes||{};S.settings.workoutTimes[${i}]=this.value.trim()">
+      <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="wt-fasted-${i}" ${times['fasted_'+i]?'checked':''} 
+          onchange="S.settings.workoutTimes=S.settings.workoutTimes||{};S.settings.workoutTimes['fasted_${i}']=this.checked;document.getElementById('wt-${i}').disabled=this.checked">
+        натощак
+      </label>
+    </div>`).join('');
+  // Применяем disabled для натощак дней
+  wdays.forEach(i=>{
+    if(times['fasted_'+i]){const el=document.getElementById('wt-'+i);if(el)el.disabled=true;}
+  });
+}
+
 function toggleWD(i,btn){
   if(!S.settings.workoutDays)S.settings.workoutDays=[];
   const idx=S.settings.workoutDays.indexOf(i);
   if(idx>=0)S.settings.workoutDays.splice(idx,1);
   else S.settings.workoutDays.push(i);
   btn.classList.toggle('sel');
+  renderWdTimeGrid();
 }
 function setMC(n,btn){
   S.settings.mealCount=n;
@@ -4035,7 +4287,8 @@ function saveSettings(silent){
     ca:document.getElementById('s-ca').value||'70/30',
     prefs:document.getElementById('s-prefs').value||'',
     apikey:document.getElementById('s-apikey').value||'',
-    workoutTime:document.getElementById('s-wtime').value||'18:00',
+    workoutTime:'18:00',// legacy fallback
+    workoutTimes:S.settings.workoutTimes||{},
     githubUser:document.getElementById('s-ghuser').value.trim()||'',
     githubRepo:document.getElementById('s-ghrepo').value.trim()||'',
   };
@@ -4292,7 +4545,6 @@ function initSettingsUI(){
   document.getElementById('s-ca').value=fs.ca||'70/30';
   document.getElementById('s-prefs').value=fs.prefs||'';
   document.getElementById('s-apikey').value=fs.apikey||'';
-  document.getElementById('s-wtime').value=fs.workoutTime||'18:00';
   document.getElementById('s-ghuser').value=fs.githubUser||'';
   document.getElementById('s-ghrepo').value=fs.githubRepo||'';
   // Meal count buttons
@@ -4333,7 +4585,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.3.2';
+const APP_VERSION='2.4.2';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
