@@ -1611,8 +1611,14 @@ function openedExpiry(expiry,productName){
   else if(n.match(/сыр мягк|моцарелл|рикотт|фет/))daysAfterOpen=3;
   else if(n.match(/курин|говядин|свинин|мяс/))daysAfterOpen=2;
   else if(n.match(/рыб|сёмг|форел/))daysAfterOpen=2;
-  else if(n.match(/масл/))daysAfterOpen=30;
-  else if(n.match(/гречк|овсянк|рис|макарон/))daysAfterOpen=90;
+  // Сыпучие и специи — срок не меняется после вскрытия
+  else if(n.match(/tiefgefror|tiefkühl|gefroren|frozen|заморож|заморозк|заморозить/))daysAfterOpen=730;
+  else if(n.match(/эритрит|erythrit|stevia|стевия|сахар|zucker|соль|salz|специ|gewürz|spice|мука|mehl|крахмал|stärke|разрыхлит|backpulver|сода|baking/))daysAfterOpen=730;
+  else if(n.match(/чай|tee|tea|кофе|kaffee|coffee|какао|kakao|cacao/))daysAfterOpen=365;
+  else if(n.match(/гречк|овсянк|рис|reis|макарон|pasta|нудл|nudel|quinoa|киноа|булгур|полба|амарант/))daysAfterOpen=180;
+  else if(n.match(/орех|nuss|миндал|mandel|фундук|hasel|грецк|wal|кешью|cashew|фисташ|pistaz/))daysAfterOpen=90;
+  else if(n.match(/масл|oil|öl/))daysAfterOpen=60;
+  else if(n.match(/варень|джем|мёд|honig|мармелад|sirup|сироп/))daysAfterOpen=180;
   // Берём минимум из срока на упаковке и срока после вскрытия
   const fromOpen=new Date();fromOpen.setDate(fromOpen.getDate()+daysAfterOpen);
   if(!expiry)return fromOpen.toISOString().split('T')[0];
@@ -2638,20 +2644,70 @@ async function generateWeekMenu(){
   const fatPerMeal=Math.round(g.fat/mealCount);
   const carbPerMeal=Math.round(g.carb/mealCount);
   const fiberPerMeal=Math.round((g.fiber||30)/mealCount);
-  // Сортируем: просроченные первыми, потом по сроку годности
-  const sortedProducts=[...S.products].sort((a,b)=>{
-    const today=new Date().toISOString().split('T')[0];
-    const aExp=a.expiry||'9999';const bExp=b.expiry||'9999';
-    const aExpired=aExp<today;const bExpired=bExp<today;
-    if(aExpired&&!bExpired)return -1;
-    if(!aExpired&&bExpired)return 1;
-    return aExp.localeCompare(bExp);
-  });
+  // ── УМНАЯ ВЫБОРКА ПРОДУКТОВ ──
   const todayStr=new Date().toISOString().split('T')[0];
-  const prods=sortedProducts.map(p=>{
+  const in7days=new Date();in7days.setDate(in7days.getDate()+7);
+  const in7Str=in7days.toISOString().split('T')[0];
+
+  // 1. Группируем одинаковые продукты
+  const grouped={};
+  S.products.forEach(p=>{
+    const key=p.name.toLowerCase();
+    if(!grouped[key]){grouped[key]={...p,weight:0,opened:false,expiry:p.expiry};}
+    grouped[key].weight+=p.weight||0;
+    if(p.opened)grouped[key].opened=true;
+    // Берём ближайший срок годности
+    if(p.expiry&&(!grouped[key].expiry||p.expiry<grouped[key].expiry))grouped[key].expiry=p.expiry;
+  });
+  const allProds=Object.values(grouped).filter(p=>p.weight>=20);
+
+  // 2. Категории для умной выборки
+  const selected=new Set();
+  const addTop=(arr,n=3)=>arr.slice(0,n).forEach(p=>selected.add(p.name.toLowerCase()));
+
+  // Просроченные и срок ≤7 дней — все
+  allProds.filter(p=>p.expiry&&p.expiry<=in7Str).forEach(p=>selected.add(p.name.toLowerCase()));
+
+  // Топ по белку
+  addTop([...allProds].sort((a,b)=>(b.prot||0)-(a.prot||0)),5);
+  // Топ по соотношению белок/жир
+  addTop([...allProds].filter(p=>p.prot).sort((a,b)=>(b.prot||0)/((b.fat||0)+1)-(a.prot||0)/((a.fat||0)+1)),5);
+  // Топ ненасыщенных жиров (омега-3): рыба, льняное, чиа
+  addTop([...allProds].filter(p=>p.fatPoly||p.name.match(/lachs|salmon|форел|тунец|thun|чиа|chia|лён|flax|конопл|hemp/i)).sort((a,b)=>(b.fatPoly||0)-(a.fatPoly||0)),3);
+  // Топ насыщенных жиров
+  addTop([...allProds].filter(p=>p.fatSat).sort((a,b)=>(b.fatSat||0)-(a.fatSat||0)),2);
+  // Топ сложных углеводов (клетчатка)
+  addTop([...allProds].filter(p=>p.fiber).sort((a,b)=>(b.fiber||0)-(a.fiber||0)),4);
+  // Топ простых углеводов
+  addTop([...allProds].filter(p=>p.sugar).sort((a,b)=>(b.sugar||0)-(a.sugar||0)),2);
+  // Топ по витаминам и минералам
+  ['vitC','vitD','vitB12','fe','ca','mg'].forEach(v=>{
+    addTop([...allProds].filter(p=>p[v]).sort((a,b)=>(b[v]||0)-(a[v]||0)),2);
+  });
+
+  // 3. Добавляем остальные до лимита 80
+  const remaining=[...allProds].filter(p=>!selected.has(p.name.toLowerCase()))
+    .sort((a,b)=>(a.expiry||'9999').localeCompare(b.expiry||'9999'));
+  remaining.forEach(p=>{if(selected.size<80)selected.add(p.name.toLowerCase());});
+
+  // 4. Финальный список отсортированный по сроку
+  const selectedProds=allProds
+    .filter(p=>selected.has(p.name.toLowerCase()))
+    .sort((a,b)=>{
+      const aExp=a.expiry||'9999';const bExp=b.expiry||'9999';
+      const aExpired=aExp<todayStr;const bExpired=bExp<todayStr;
+      if(aExpired&&!bExpired)return -1;if(!aExpired&&bExpired)return 1;
+      return aExp.localeCompare(bExp);
+    });
+
+  // 5. Исключённые мелкие продукты — одной строкой
+  const excluded=Object.values(grouped).filter(p=>p.weight<20).map(p=>p.name);
+
+  const prods=selectedProds.map(p=>{
     const expired=p.expiry&&p.expiry<todayStr;
-    const prefix=expired?'⚠ ПРОСРОЧЕН — использовать немедленно или проверить: ':'• ';
-    const base=`${prefix}${p.name}: ${p.weight||'?'}г, до ${p.expiry||'?'}${expired?' (просрочен на '+Math.floor((new Date(todayStr)-new Date(p.expiry))/864e5)+'д)':''}, ${p.kcal||0}ккал/100г, Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}`;
+    const urgent=p.expiry&&p.expiry>todayStr&&p.expiry<=in7Str;
+    const prefix=expired?'⚠ ПРОСРОЧЕН: ':urgent?'⏰ СРОЧНО (≤7дн): ':'• ';
+    const base=`${prefix}${p.name}: ${Math.round(p.weight)}г, до ${p.expiry||'?'}${expired?' (просрочен на '+Math.floor((new Date(todayStr)-new Date(p.expiry))/864e5)+'д)':''}, ${p.kcal||0}ккал/100г, Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}`;
     const extra=[];
     if(p.fatSat!=null)extra.push(`нас.ж${p.fatSat}`);
     if(p.fatMono!=null)extra.push(`моно${p.fatMono}`);
@@ -2669,6 +2725,7 @@ async function generateWeekMenu(){
     return base+(extra.length?`, ${extra.join(', ')}`:'')+
       (!p._enriched&&!p.fatSat&&!p.fiber?' [нутриенты неполные]':'');
   }).join('\n');
+  const excludedLine=excluded.length?`\nТакже доступны (малые количества): ${excluded.slice(0,20).join(', ')}${excluded.length>20?` и ещё ${excluded.length-20}`:''}`:'';
   const liked=S.dishes.filter(d=>d.liked).map(d=>d.name).join(', ')||'нет';
   const disliked=S.dishes.filter(d=>d.disliked).map(d=>d.name).join(', ')||'нет';
   // Формируем информацию о тренировках по дням
@@ -2725,8 +2782,15 @@ async function generateWeekMenu(){
 НЕ планируй продукт если его не хватит на порцию.
 В поле "warnings" указывай если продукта не хватает.
 
-━━━ ПРОДУКТЫ (сортированы по сроку годности) ━━━
-${prods}
+━━━ ПРОДУКТЫ (топ по сроку, нутриентам, сгруппированы) ━━━
+${prods}${excludedLine}
+
+━━━ ПРАВИЛА ПРЕДУПРЕЖДЕНИЙ ━━━
+Если из имеющихся продуктов НЕВОЗМОЖНО достичь целей:
+- КБЖУ отклонение >10% → укажи в warnings ЧТО не хватает и добавь в shopping конкретный продукт с объяснением
+- Витамин/минерал невозможно закрыть → shopping: "Название продукта — для восполнения витD/Fe/Ca/..."
+- Нехватка ненасыщенных жиров → shopping: "Льняное масло/лосось/чиа — омега-3"
+- НЕ добавляй в shopping то что уже есть в достаточном количестве
 
 ━━━ ОБЯЗАТЕЛЬНЫЕ ТРЕБОВАНИЯ К КАЖДОМУ ДНЮ ━━━
 ⚠ ЭТО НЕ РЕКОМЕНДАЦИИ — ЭТО ЖЁСТКИЕ ТРЕБОВАНИЯ:
@@ -3459,7 +3523,12 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
   allDishes.forEach(dish=>{
     const normName=dish.replace(/\s*—\s*[\d,.]+\s*(г|мл|g|ml)\s*$/i,'').trim();
     if(S.yazioMapping.hasOwnProperty(normName)){
-      if(S.yazioMapping[normName])known.push({dish,normName,target:S.yazioMapping[normName]});
+      const mapVal=S.yazioMapping[normName];
+      if(mapVal){
+        const target=typeof mapVal==='object'?mapVal.product:mapVal;
+        const ratio=typeof mapVal==='object'&&mapVal.ratio?mapVal.ratio/100:1;
+        known.push({dish,normName,target,ratio});
+      }
       // null = пользователь сказал "не в холодильнике", пропускаем
     }else{
       unknown.push({dish,normName});
@@ -3522,7 +3591,10 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
       if(!mapping)return;
 
       const alreadyDeducted=dayDeducted[normName]||0;
-      let toDeduct=Math.max(0,totalGrams-alreadyDeducted);
+      // Применяем коэффициент конвертации (например чай: 300мл → 4.5г)
+      const ratio=mapping.ratio||1;
+      const convertedGrams=Math.round(totalGrams*ratio*10)/10;
+      let toDeduct=Math.max(0,convertedGrams-alreadyDeducted);
       if(toDeduct<=0)return;
 
       // Все упаковки этого продукта — сначала вскрытые
@@ -3645,6 +3717,12 @@ async function showMappingConfirmation(unknown){
         <input type="text" id="map-${i}" list="dl-fridge-map" value="${esc(hasSug?sug:'')}"
           placeholder="Начни вводить название продукта..."
           style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:7px;font-size:12px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <label style="font-size:11px;color:var(--text2);white-space:nowrap">г продукта на 100г/мл блюда:</label>
+          <input type="number" id="map-ratio-${i}" placeholder="100" step="0.1" min="0.1" max="200" value="100"
+            style="width:80px;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:5px 8px;font-size:12px">
+          <span style="font-size:10px;color:var(--text2)">Чай≈1.4, Кофе≈9.4, Лимон.сок≈47</span>
+        </div>
         <button onclick="document.getElementById('map-${i}').value=''"
           style="font-size:10px;background:none;border:none;color:var(--text2);cursor:pointer;margin-top:2px;padding:0">× не в холодильнике</button>
       </div>`;
@@ -3660,12 +3738,19 @@ async function showMappingConfirmation(unknown){
     overlay.querySelector('#mapSaveBtn').addEventListener('click',()=>{
       if(!S.yazioMapping)S.yazioMapping={};
       unknown.forEach((u,i)=>{
-        const sel=overlay.querySelector(`#map-${i}`);
-        S.yazioMapping[u.normName]=sel?.value||null;
+        const inp=overlay.querySelector(`#map-${i}`);
+        const ratioEl=overlay.querySelector(`#map-ratio-${i}`);
+        const productName=inp?.value?.trim()||null;
+        const ratio=ratioEl?parseFloat(ratioEl.value)||100:100;
+        if(productName){
+          S.yazioMapping[u.normName]=ratio!==100?{product:productName,ratio}:productName;
+        }else{
+          S.yazioMapping[u.normName]=null;
+        }
       });
       S._pendingMapping=null;
       S._pendingSuggestions=null;
-      save();overlay.remove();resolve(true);// true = сохранено
+      save();overlay.remove();resolve(true);
     });
 
     overlay.querySelector('#mapSkipBtn').addEventListener('click',()=>{
@@ -4624,7 +4709,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.4.4';
+const APP_VERSION='2.5.1';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
