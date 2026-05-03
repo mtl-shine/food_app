@@ -1,6 +1,6 @@
 {
-  "synced_at": "2026-05-03T17:57:40.999980",
-  "days_back": 2,
+  "synced_at": "2026-05-03T17:57:53.568580",
+  "days_back": 3,
   "diary": [
     {
       "date": "2026-05-03",
@@ -90,6 +90,58 @@
         "Pangasius file — 181.4г",
         "Teriyaki sauce w toasted seasame — 23.1мл"
       ]
+    },
+    {
+      "date": "2026-05-01",
+      "kcal": 2862,
+      "prot": 156.3,
+      "fat": 48.0,
+      "carb": 445.2,
+      "fiber": 0,
+      "entry_count": 52,
+      "dishes": [
+        "Basmatireis  — 100г",
+        "Wildlachs Filetspitzen Followfish — 217.5г",
+        "Spinat (Blattspinat), frisch — 20.2г",
+        "Teriyaki sauce w toasted seasame — 35.3мл",
+        "Rote Paprika, frisch — 38.7г",
+        "Eisbergsalat, frisch — 53.7г",
+        "Морковь, свежая — 92.1г",
+        "Radieschen, frisch — 71.9г",
+        "Огурец — 185.5г",
+        "Rispentomaten, frisch — 129.1г",
+        "Арбуз — 614.0г",
+        "Сахарный песок — 8.7г",
+        "Walnusskerne (Naturbelassen)  — 6.0г",
+        "Mandeln — 6.2г",
+        "Kürbiskerne — 1.9г",
+        "Waldhonig — 9.4г",
+        "Pompongs Passionsfrucht — 68.6г",
+        "Чай чёрный с лимоном и свежей мятой — 640мл",
+        "Vanille gemahlen  — 0.2г",
+        "Rewe Bio Haferflocken kernig — 87.6г",
+        "Укроп, свежий — 16г",
+        "Schnittlauch, frisch — 7.5г",
+        "Петрушка, свежая — 13.3г",
+        "Milchreis — 100г",
+        "Frisch Milch — 200.6мл",
+        "Körniger Frischkäse 2,5 % Fett i. Tr. — 268.8г",
+        "Sami — 20г",
+        "Rewe Bio Orangenschale — 1.5г",
+        "Чеснок — 10.5г",
+        "Gratinkäse leicht ja — 17.1г",
+        "Naturland Emmerbrot — 89.5г",
+        "Buratta — 57.5г",
+        "Cherrytomaten (Cocktailtomaten), frisch — 35.1г",
+        "Soft Tomaten — 14.4г",
+        "Parmigiano Reggiano — 6.1г",
+        "Crema — 0.6мл",
+        "Paprika, Orange — 38.5г",
+        "Heidelbeeren (Blaubeeren), frisch — 33.1г",
+        "Physalis (Kapstachelbeeren) — 28.5г",
+        "Brombeeren, frisch — 33.3г",
+        "Клубника — 64.1г"
+      ]
     }
   ],
   "frequent_dishes": [
@@ -125,9 +177,9 @@
     "Vanille Sirup — 4.3мл"
   ],
   "summary": {
-    "avg_kcal": 1960,
-    "avg_prot": 97.5,
-    "avg_fat": 41.7,
-    "avg_carb": 290.4
+    "avg_kcal": 2261,
+    "avg_prot": 117.1,
+    "avg_fat": 43.8,
+    "avg_carb": 342.0
   }
 }
