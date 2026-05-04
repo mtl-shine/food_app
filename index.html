@@ -2575,6 +2575,45 @@ function showDay(idx){
   html+=`</div>`;
   if(dm.reason)html+=`<div class="card"><div class="ct">Почему именно это?</div><div class="rb">${esc(dm.reason)}</div></div>`;
   if(dm.prepNote)html+=`<div class="card" style="border-color:rgba(251,191,36,0.3)"><div class="ct">⏰ Подготовить заранее</div><div class="rb" style="color:var(--text2)">${esc(dm.prepNote)}</div></div>`;
+
+  // Витамины и минералы дня
+  const nutriNorms={vitC:{norm:90,unit:'мг',label:'Витамин C'},vitD:{norm:15,unit:'мкг',label:'Витамин D'},
+    vitB12:{norm:2.4,unit:'мкг',label:'Витамин B12'},fe:{norm:18,unit:'мг',label:'Железо'},
+    ca:{norm:1000,unit:'мг',label:'Кальций'},mg:{norm:310,unit:'мг',label:'Магний'}};
+  // Считаем нутриенты из продуктов которые упомянуты в блюдах дня
+  const dayNutri={};
+  const dayIngredients=[];
+  meals.forEach(t=>{const m=dm[t];if(!m?.name)return;
+    const matches=[...m.name.matchAll(/([а-яёА-ЯЁa-zA-ZäöüÄÖÜß\s]+?)\s+(\d+)\s*г/g)];
+    matches.forEach(match=>{
+      const iName=match[1].trim();const grams=parseInt(match[2]);
+      const prod=S.products.find(p=>p.name.toLowerCase().includes(iName.toLowerCase())||iName.toLowerCase().includes(p.name.toLowerCase().split(' ')[0]));
+      if(prod){
+        dayIngredients.push({name:prod.name,grams});
+        Object.keys(nutriNorms).forEach(k=>{
+          if(prod[k])dayNutri[k]=(dayNutri[k]||0)+prod[k]*grams/100;
+        });
+      }
+    });
+  });
+  if(Object.keys(dayNutri).length){
+    html+=`<div class="card"><div class="ct">Витамины и минералы</div>`;
+    Object.entries(nutriNorms).forEach(([k,{norm,unit,label}])=>{
+      const got=dayNutri[k]||0;
+      const pct=Math.round(got/norm*100);
+      const color=pct>=80?'#4ade80':pct>=50?'#fbbf24':'var(--acc)';
+      const sources=dayIngredients.filter(i=>{
+        const p=S.products.find(pr=>pr.name===i.name);return p&&p[k];
+      }).map(i=>i.name).filter((v,j,a)=>a.indexOf(v)===j).slice(0,2).join(', ');
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--cb)">
+        <span style="font-size:12px;flex:1;color:var(--text2)">${label}</span>
+        <span style="font-size:12px;color:${color}">${Math.round(got*10)/10}${unit}</span>
+        <span style="font-size:11px;color:var(--text2)">/ ${norm}${unit} (${pct}%)</span>
+        ${sources?`<span style="font-size:10px;color:var(--text2);opacity:0.7">${sources}</span>`:''}
+      </div>`;
+    });
+    html+=`</div>`;
+  }
   // ЖКТ за день
   const dateStr=d.date.toISOString().split('T')[0];
   const gutDay=S.gutLog.filter(g=>g.date===dateStr);
@@ -2661,6 +2700,34 @@ async function generateWeekMenu(){
   });
   const allProds=Object.values(grouped).filter(p=>p.weight>=20);
 
+  // Срочные продукты (≤2 дней) — ОБЯЗАТЕЛЬНЫ в ближайшие дни
+  const in2days=new Date();in2days.setDate(in2days.getDate()+2);
+  const in2Str=in2days.toISOString().split('T')[0];
+  const urgentProds=allProds.filter(p=>p.expiry&&p.expiry<=in2Str);
+
+  // Считаем запасы с учётом уже составленного меню
+  // JS вычитает запланированный расход и передаёт точные остатки
+  const inventory={};
+  allProds.forEach(p=>{inventory[p.name.toLowerCase()]=p.weight;});
+
+  // Парсим граммовку из уже составленных дней меню
+  if(S.menu){
+    for(let di=0;di<todayIdx;di++){
+      const dm=S.menu[di];if(!dm)continue;
+      meals.forEach(meal=>{
+        const m=dm[meal];if(!m?.name)return;
+        const matches=[...m.name.matchAll(/([а-яёА-ЯЁa-zA-ZäöüÄÖÜß\s]+?)\s+(\d+)\s*г/g)];
+        matches.forEach(match=>{
+          const prodName=match[1].trim().toLowerCase();
+          const grams=parseInt(match[2]);
+          // Ищем ближайший продукт в инвентаре
+          const key=Object.keys(inventory).find(k=>k.includes(prodName)||prodName.includes(k.split(' ')[0]));
+          if(key)inventory[key]=Math.max(0,(inventory[key]||0)-grams);
+        });
+      });
+    }
+  }
+
   // 2. Категории для умной выборки
   const selected=new Set();
   const addTop=(arr,n=3)=>arr.slice(0,n).forEach(p=>selected.add(p.name.toLowerCase()));
@@ -2690,9 +2757,11 @@ async function generateWeekMenu(){
     .sort((a,b)=>(a.expiry||'9999').localeCompare(b.expiry||'9999'));
   remaining.forEach(p=>{if(selected.size<80)selected.add(p.name.toLowerCase());});
 
-  // 4. Финальный список отсортированный по сроку
+  // 4. Финальный список с актуальными остатками
   const selectedProds=allProds
     .filter(p=>selected.has(p.name.toLowerCase()))
+    .map(p=>({...p,weight:Math.round(inventory[p.name.toLowerCase()]??p.weight)}))
+    .filter(p=>p.weight>0)// убираем исчерпанные
     .sort((a,b)=>{
       const aExp=a.expiry||'9999';const bExp=b.expiry||'9999';
       const aExpired=aExp<todayStr;const bExpired=bExp<todayStr;
@@ -2702,6 +2771,12 @@ async function generateWeekMenu(){
 
   // 5. Исключённые мелкие продукты — одной строкой
   const excluded=Object.values(grouped).filter(p=>p.weight<20).map(p=>p.name);
+
+  // 6. Блок срочных продуктов
+  const urgentBlock=urgentProds.length?
+    `\n⚠ ОБЯЗАТЕЛЬНО ИСПОЛЬЗОВАТЬ (срок ≤2 дней — нельзя пропустить):\n`+
+    urgentProds.map(p=>`СЕГОДНЯ/ЗАВТРА: ${p.name} — ${Math.round(inventory[p.name.toLowerCase()]??p.weight)}г, до ${p.expiry}`).join('\n')
+    :'';
 
   const prods=selectedProds.map(p=>{
     const expired=p.expiry&&p.expiry<todayStr;
@@ -2783,7 +2858,7 @@ async function generateWeekMenu(){
 В поле "warnings" указывай если продукта не хватает.
 
 ━━━ ПРОДУКТЫ (топ по сроку, нутриентам, сгруппированы) ━━━
-${prods}${excludedLine}
+${prods}${excludedLine}${urgentBlock}
 
 ━━━ ПРАВИЛА ПРЕДУПРЕЖДЕНИЙ ━━━
 Если из имеющихся продуктов НЕВОЗМОЖНО достичь целей:
@@ -4709,7 +4784,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.5.1';
+const APP_VERSION='2.5.2';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
