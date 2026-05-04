@@ -966,18 +966,20 @@ function addToHistory(p){
 }
 
 /* ── API ── */
-async function claude(messages,system,maxTok){
+async function claude(messages,system,maxTok,model){
   const k=S.settings.apikey;if(!k)return null;
+  const m=model||'claude-sonnet-4-20250514';
   try{
     const r=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTok||2000,system:system||'',messages})
+      body:JSON.stringify({model:m,max_tokens:maxTok||2000,system:system||'',messages})
     });
     if(!r.ok){const e=await r.json();return{error:e.error?.message||'Ошибка API'};}
     return(await r.json()).content?.[0]?.text||null;
   }catch(e){return{error:'Нет соединения'};}
 }
+const HAIKU='claude-haiku-4-5-20251001';
 
 /* ── NAV ── */
 function show(name){document.querySelectorAll('.scr').forEach(s=>s.classList.remove('active'));document.getElementById('scr-'+name)?.classList.add('active');}
@@ -1121,7 +1123,7 @@ ${prods}
 
 ТОЛЬКО JSON:
 {"analysis":"краткий анализ нутриентов","gaps":["нутриент — почему не хватает"],"shopping":["конкретный продукт — зачем и примерное количество"]}`}],
-  'Ты диетолог-нутрициолог. Только JSON.',800);
+  'Ты диетолог-нутрициолог. Только JSON.',800,HAIKU);
 
   if(btn){btn.disabled=false;btn.innerHTML='↺ обновить';}
 
@@ -2549,7 +2551,7 @@ function showDay(idx){
   document.getElementById('backBtn').style.display='block';
   document.getElementById('mainNav').style.display='none';
   document.getElementById('refreshBtn').style.display='none';
-  const dm=S.menu?.[idx]||{};const wo=isWorkoutDay(idx);const meals=getMeals();
+  const dm=S.menu?.[idx]||{};const wo=isWorkoutDay(idx);const meals=getMeals();const g=S.settings;
   let html='';
   if(dm.warnings?.length){html+=`<div class="card">`;dm.warnings.forEach(w=>html+=`<div class="na">⚠ ${esc(w)}</div>`);html+=`</div>`;}
   if(wo){
@@ -2577,9 +2579,24 @@ function showDay(idx){
   if(dm.prepNote)html+=`<div class="card" style="border-color:rgba(251,191,36,0.3)"><div class="ct">⏰ Подготовить заранее</div><div class="rb" style="color:var(--text2)">${esc(dm.prepNote)}</div></div>`;
 
   // Витамины и минералы дня
-  const nutriNorms={vitC:{norm:90,unit:'мг',label:'Витамин C'},vitD:{norm:15,unit:'мкг',label:'Витамин D'},
-    vitB12:{norm:2.4,unit:'мкг',label:'Витамин B12'},fe:{norm:18,unit:'мг',label:'Железо'},
-    ca:{norm:1000,unit:'мг',label:'Кальций'},mg:{norm:310,unit:'мг',label:'Магний'}};
+  const nutriNorms={
+    vitC:{norm:90,unit:'мг',label:'Витамин C'},
+    vitD:{norm:15,unit:'мкг',label:'Витамин D'},
+    vitB12:{norm:2.4,unit:'мкг',label:'Витамин B12'},
+    vitA:{norm:900,unit:'мкг',label:'Витамин A'},
+    vitE:{norm:15,unit:'мг',label:'Витамин E'},
+    vitB1:{norm:1.1,unit:'мг',label:'Витамин B1'},
+    vitB2:{norm:1.3,unit:'мг',label:'Витамин B2'},
+    vitB6:{norm:1.3,unit:'мг',label:'Витамин B6'},
+    fe:{norm:18,unit:'мг',label:'Железо'},
+    ca:{norm:1000,unit:'мг',label:'Кальций'},
+    mg:{norm:310,unit:'мг',label:'Магний'},
+    zn:{norm:8,unit:'мг',label:'Цинк'},
+    fatSat:{norm:Math.round((g.fat||47)*0.2),unit:'г',label:'Насыщ. жиры (макс)'},
+    fatPoly:{norm:Math.round((g.fat||47)*0.4),unit:'г',label:'Полиненасыщ. жиры'},
+    fatMono:{norm:Math.round((g.fat||47)*0.4),unit:'г',label:'Мононенасыщ. жиры'},
+    fiber:{norm:g.fiber||31,unit:'г',label:'Клетчатка'},
+  };
   // Считаем нутриенты из продуктов которые упомянуты в блюдах дня
   const dayNutri={};
   const dayIngredients=[];
@@ -2769,8 +2786,14 @@ async function generateWeekMenu(){
       return aExp.localeCompare(bExp);
     });
 
-  // 5. Исключённые мелкие продукты — одной строкой
-  const excluded=Object.values(grouped).filter(p=>p.weight<20).map(p=>p.name);
+  // Суммарный нутриентный профиль холодильника
+  const nutriSummary={vitC:0,vitD:0,vitB12:0,fe:0,ca:0,mg:0,zn:0,vitA:0,vitE:0,fatPoly:0,fatMono:0,fatSat:0,fiber:0,prot:0};
+  allProds.forEach(p=>{
+    Object.keys(nutriSummary).forEach(k=>{
+      if(p[k])nutriSummary[k]+=p[k]*(inventory[p.name.toLowerCase()]||p.weight)/100;
+    });
+  });
+  const nutriSummaryLine=`Суммарно доступно в холодильнике: витC${Math.round(nutriSummary.vitC)}мг, витD${Math.round(nutriSummary.vitD*10)/10}мкг, B12_${Math.round(nutriSummary.vitB12*10)/10}мкг, Fe${Math.round(nutriSummary.fe)}мг, Ca${Math.round(nutriSummary.ca)}мг, Mg${Math.round(nutriSummary.mg)}мг, клетч${Math.round(nutriSummary.fiber)}г, омега-6/поли${Math.round(nutriSummary.fatPoly)}г`;
 
   // 6. Блок срочных продуктов
   const urgentBlock=urgentProds.length?
@@ -2858,6 +2881,7 @@ async function generateWeekMenu(){
 В поле "warnings" указывай если продукта не хватает.
 
 ━━━ ПРОДУКТЫ (топ по сроку, нутриентам, сгруппированы) ━━━
+${nutriSummaryLine}
 ${prods}${excludedLine}${urgentBlock}
 
 ━━━ ПРАВИЛА ПРЕДУПРЕЖДЕНИЙ ━━━
@@ -4129,7 +4153,7 @@ async function showRecipe(mealName,ingredients){
   const resp=await claude([{role:'user',content:`Напиши краткий рецепт для блюда "${mealName}".
 ${ingredients?'Ингредиенты: '+ingredients:'Продукты в холодильнике: '+prods}
 Формат: список ингредиентов с граммовкой, затем 3-6 шагов приготовления. Кратко и практично. По-русски.`}],
-  'Ты повар-диетолог. Краткие практичные рецепты по-русски.',800);
+  'Ты повар-диетолог. Краткие практичные рецепты по-русски.',800,HAIKU);
 
   const text=typeof resp==='string'?resp:'Не удалось загрузить рецепт.';
   // Кешируем
@@ -4784,7 +4808,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.5.2';
+const APP_VERSION='2.5.3';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
