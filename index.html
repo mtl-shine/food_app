@@ -418,6 +418,7 @@ select option{background:#1a1a2e;color:var(--text)}
     <button class="bs" onclick="generateWeekMenu()">↺ Пересоставить меню</button>
     <button class="bs" onclick="syncFridgeToHistory()">🔄 Синхронизировать базу с холодильником</button>
     <button class="bs" onclick="mergeDuplicates()">🔗 Объединить дублирующиеся продукты</button>
+    <button class="bs" onclick="bulkEnrich()" id="bulkEnrichBtn">✨ Обогатить все продукты (витамины/минералы)</button>
     <button class="bs" onclick="verifyNutrientsByComposition()" id="btnVerifyNutrients">🔬 Проверить нутриенты по составу</button>
     <button class="bs" onclick="exportData()">📤 Экспорт данных (резервная копия)</button>
     <button class="bs" onclick="document.getElementById('importFile').click()">📥 Импорт данных</button>
@@ -2874,11 +2875,19 @@ async function generateWeekMenu(){
 К концу недели запасы должны быть минимальны.
 Покупки только для восполнения критически недостающих нутриентов.
 
-━━━ РАСХОД ПРОДУКТОВ ВНУТРИ НЕДЕЛИ ━━━
-Рассчитывай остатки последовательно день за днём.
-Если в пн используешь гречку 100г (из 200г) — во вт доступно только 100г.
-НЕ планируй продукт если его не хватит на порцию.
-В поле "warnings" указывай если продукта не хватает.
+━━━ ПРИОРИТЕТ ИСПОЛЬЗОВАНИЯ ПРОДУКТОВ (СТРОГО) ━━━
+1. Просроченные (срок истёк) → использовать СЕГОДНЯ (dayIndex=${todayIdx}) обязательно
+2. Срок ≤3 дней → использовать в первые 3 дня меню
+3. Срок ≤7 дней → использовать в первые 7 дней
+4. Остальные → в любой день
+
+АЛГОРИТМ ДЛЯ КАЖДОГО ДНЯ:
+- Сначала выбери продукты с наиболее срочным сроком
+- Из них составь основу приёма пищи
+- Добери недостающие КБЖУ/витамины/минералы продуктами с долгим сроком
+- Если срочный продукт превышает норму — уменьши порцию, но включи обязательно
+- НЕ планируй продукт если его хватает только на один день — не дели на два
+- В warnings указывай если продукта не хватает
 
 ━━━ ПРОДУКТЫ (топ по сроку, нутриентам, сгруппированы) ━━━
 ${nutriSummaryLine}
@@ -3384,37 +3393,46 @@ function reviewYazioMapping(nullOnly=false){
   overlay.style.cssText='position:fixed;inset:0;background:rgba(26,26,46,0.97);z-index:100;overflow-y:auto;padding:16px;box-sizing:border-box';
 
   const prodNames=[...new Set(S.products.map(p=>p.name))].sort((a,b)=>a.localeCompare(b,'ru'));
-  const fridgeOpts='<option value="">— не в моём холодильнике —</option>'+
-    prodNames.map(name=>{
-      const items=S.products.filter(p=>p.name===name);
-      const openedCount=items.filter(p=>p.opened).length;
-      const totalWeight=items.reduce((s,p)=>s+p.weight,0);
-      return`<option value="${esc(name)}">${esc(name)} (${totalWeight}г${openedCount?`, 📭${openedCount}`:''})`;
-    }).join('');
+  const datalistOpts=prodNames.map(name=>{
+    const items=S.products.filter(p=>p.name===name);
+    const total=items.reduce((s,p)=>s+p.weight,0);
+    const opened=items.filter(p=>p.opened).length;
+    return`<option value="${esc(name)}">${esc(name)} (${total}г${opened?` 📭${opened}`:''})`;
+  }).join('');
 
   let html=`
+    <datalist id="dl-review-fridge">${datalistOpts}</datalist>
     <div style="font-size:15px;font-weight:600;margin-bottom:4px;padding-top:8px">
       ${nullOnly?'❓ Отсутствующие продукты':'📋 Все сопоставления'} (${filtered.length})
     </div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
       ${nullOnly?'Блюда отмеченные как «не в холодильнике» — возможно теперь они есть.':'Все текущие сопоставления — можно исправить любое.'}
     </div>
-    <input type="text" placeholder="🔍 Поиск..." oninput="filterMappingItems(this.value)"
+    <input type="text" placeholder="🔍 Поиск по блюду Yazio..." oninput="filterMappingItems(this.value)"
       style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:8px;font-size:13px;box-sizing:border-box;margin-bottom:10px">
     <div id="mappingItems">`;
 
-  filtered.forEach(([yaziоName, fridgeName],i)=>{
-    const opts=fridgeName?
-      fridgeOpts.replace(`value="${esc(fridgeName)}"`,`value="${esc(fridgeName)}" selected`):
-      fridgeOpts;
+  filtered.forEach(([yazioName,mapVal],i)=>{
+    const fridgeName=typeof mapVal==='object'?mapVal?.product:mapVal;
+    const ratio=typeof mapVal==='object'&&mapVal?.ratio?mapVal.ratio:100;
     const hasMatch=!!fridgeName;
-    html+=`<div class="mapping-item" data-name="${esc(yaziоName.toLowerCase())}"
+    html+=`<div class="mapping-item" data-name="${esc(yazioName.toLowerCase())}"
       style="background:var(--cs);border-radius:10px;padding:10px;border:0.5px solid ${hasMatch?'rgba(74,222,128,0.3)':'rgba(233,69,96,0.3)'};margin-bottom:8px">
       <div style="font-size:11px;color:var(--text2)">Из Yazio:</div>
-      <div style="font-size:13px;font-weight:500;margin:2px 0 6px">${esc(yaziоName)}</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Сейчас: <b>${hasMatch?esc(fridgeName):'не в холодильнике'}</b></div>
-      <select id="review-${i}" style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:7px;font-size:12px">${opts}</select>
-      <input type="hidden" id="review-key-${i}" value="${esc(yaziоName)}">
+      <div style="font-size:13px;font-weight:500;margin:2px 0 6px">${esc(yazioName)}</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Продукт в холодильнике:</div>
+      <input type="text" id="review-${i}" list="dl-review-fridge" value="${esc(fridgeName||'')}"
+        placeholder="Начни вводить название..."
+        style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:7px;font-size:12px;box-sizing:border-box">
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <label style="font-size:11px;color:var(--text2);white-space:nowrap">г/100мл:</label>
+        <input type="number" id="review-ratio-${i}" value="${ratio}" step="0.1" min="0.1"
+          style="width:70px;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:5px;font-size:12px">
+        <span style="font-size:10px;color:var(--text2)">Чай≈1.4, Кофе≈9.4, Лимон.сок≈47</span>
+      </div>
+      <button onclick="document.getElementById('review-${i}').value=''"
+        style="font-size:10px;background:none;border:none;color:var(--text2);cursor:pointer;margin-top:2px;padding:0">× не в холодильнике</button>
+      <input type="hidden" id="review-key-${i}" value="${esc(yazioName)}">
     </div>`;
   });
 
@@ -3424,17 +3442,20 @@ function reviewYazioMapping(nullOnly=false){
 
   overlay.innerHTML=html;
   overlay.dataset.overlay='1';
-  overlay.dataset.count=filtered.length;
 
   overlay.querySelector('#reviewSaveBtn').addEventListener('click',()=>{
     if(!S.yazioMapping)S.yazioMapping={};
     for(let i=0;i<filtered.length;i++){
       const key=overlay.querySelector(`#review-key-${i}`)?.value;
-      const val=overlay.querySelector(`#review-${i}`)?.value||null;
-      if(key)S.yazioMapping[key]=val||null;
+      const inp=overlay.querySelector(`#review-${i}`);
+      const ratioEl=overlay.querySelector(`#review-ratio-${i}`);
+      const productName=inp?.value?.trim()||null;
+      const ratio=ratioEl?parseFloat(ratioEl.value)||100:100;
+      if(key){
+        S.yazioMapping[key]=productName?(ratio!==100?{product:productName,ratio}:productName):null;
+      }
     }
-    save();
-    overlay.remove();
+    save();overlay.remove();
     alert('✓ Сопоставления обновлены');
   });
   overlay.querySelector('#reviewCloseBtn').addEventListener('click',()=>overlay.remove());
@@ -3634,19 +3655,21 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
     }
   });
 
-  addInfo(`маппинг: ${Object.keys(S.yazioMapping).length} записей, из них активных: ${Object.values(S.yazioMapping).filter(v=>v).length}`);
-  addInfo(`блюд сегодня/вчера: ${allDishes.length} уникальных → известных: ${known.length}, новых: ${unknown.length}`);
+  // Дедупликация — один normName показывается только один раз
+  const unknownDeduped=[...new Map(unknown.map(u=>[u.normName,u])).values()];
 
-  if(unknown.length>0&&!dryRun){
-    addInfo(`${unknown.length} новых блюд → показываю форму сопоставления`);
-    // Если пользователь сейчас не на настройках — сохраняем и покажем когда откроет
+  addInfo(`маппинг: ${Object.keys(S.yazioMapping).length} записей, из них активных: ${Object.values(S.yazioMapping).filter(v=>v).length}`);
+  addInfo(`блюд сегодня/вчера: ${allDishes.length} уникальных → известных: ${known.length}, новых: ${unknownDeduped.length}`);
+
+  if(unknownDeduped.length>0&&!dryRun){
+    addInfo(`${unknownDeduped.length} новых блюд → показываю форму сопоставления`);
     const onSettings=document.getElementById('scr-settings')?.classList.contains('active');
     if(!onSettings){
-      S._pendingMapping=unknown;
+      S._pendingMapping=unknownDeduped;
       save();
       addInfo('Открой Настройки → появится форма сопоставления');
     }else{
-      const saved=await showMappingConfirmation(unknown);
+      const saved=await showMappingConfirmation(unknownDeduped);
       if(saved){
         addInfo('Маппинг сохранён, применяю вычитание...');
         await deductFromFridge(yazioData,[],false);
@@ -3657,8 +3680,8 @@ async function deductFromFridge(yazioData, updatedDates, dryRun=false){
     return;
   }
 
-  if(dryRun&&unknown.length>0){
-    addInfo(`${unknown.length} блюд без сопоставления: ${unknown.map(u=>u.normName).join(', ')}`);
+  if(dryRun&&unknownDeduped.length>0){
+    addInfo(`${unknownDeduped.length} блюд без сопоставления: ${unknownDeduped.map(u=>u.normName).join(', ')}`);
     addInfo('Для добавления сопоставлений: синхронизируй данные (не тест)');
   }
 
@@ -4518,6 +4541,32 @@ function saveSettings(silent){
   save();if(!silent)alert('Сохранено');
 }
 
+async function bulkEnrich(){
+  if(!S.settings.apikey){alert('Нужен API ключ');return;}
+  // Находим продукты без витаминов/минералов
+  const toEnrich=S.products.filter(p=>!p._enriched&&(!p.vitC&&!p.vitD&&!p.vitB12&&!p.fe&&!p.ca&&!p.mg));
+  if(!toEnrich.length){alert('Все продукты уже обогащены!');return;}
+  if(!confirm(`Обогатить ${toEnrich.length} продуктов? Это займёт время и потребует несколько API запросов.`))return;
+
+  const btn=document.getElementById('bulkEnrichBtn');
+  if(btn){btn.disabled=true;}
+  let done=0;
+  for(const prod of toEnrich){
+    if(btn)btn.innerHTML=`✨ Обогащаю... ${done}/${toEnrich.length}`;
+    const enriched=await enrichProductData({...prod});
+    if(enriched&&enriched._enriched){
+      const idx=S.products.findIndex(p=>p.id===prod.id);
+      if(idx>=0)S.products[idx]={...S.products[idx],...enriched};
+    }
+    done++;
+    if(done%5===0)save();// сохраняем каждые 5 продуктов
+  }
+  save();
+  if(btn){btn.disabled=false;btn.innerHTML='✨ Обогатить все продукты (витамины/минералы)';}
+  alert(`✓ Обогащено ${done} продуктов`);
+  renderProducts();
+}
+
 function mergeDuplicates(){
   const groups={};
   S.products.forEach(p=>{
@@ -4808,7 +4857,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.5.3';
+const APP_VERSION='2.5.4';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
