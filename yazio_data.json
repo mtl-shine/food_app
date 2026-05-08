@@ -1,7 +1,23 @@
 {
-  "synced_at": "2026-05-08T02:26:51.846598",
+  "synced_at": "2026-05-08T14:26:08.690556",
   "days_back": 2,
   "diary": [
+    {
+      "date": "2026-05-08",
+      "kcal": 570,
+      "prot": 9.8,
+      "fat": 10.3,
+      "carb": 111.2,
+      "fiber": 0,
+      "entry_count": 5,
+      "dishes": [
+        "Basmatireis  — 80г",
+        "Pistazie ohne Zucker — 37.9мл",
+        "Waldhonig — 25.3г",
+        "Банан — 100.5г",
+        "Zarte Bitter 70% — 20г"
+      ]
+    },
     {
       "date": "2026-05-07",
       "kcal": 2150,
@@ -42,6 +58,11 @@
     }
   ],
   "frequent_dishes": [
+    "Basmatireis  — 80г",
+    "Pistazie ohne Zucker — 37.9мл",
+    "Waldhonig — 25.3г",
+    "Банан — 100.5г",
+    "Zarte Bitter 70% — 20г",
     "Pazifische Kabeljau Filets — 271.4г",
     "Basmatireis  — 125.1г",
     "Морковь, свежая — 59.1г",
@@ -66,14 +87,12 @@
     "Сахарный песок — 12.5г",
     "Mini Marshmallows — 7.8г",
     "Caramel Sauce Classic Vegan — 24.7г",
-    "Milk chocolate  — 17.5г",
-    "Kürbiskerne — 3.0г",
-    "Walnusskerne (Naturbelassen)  — 4.7г"
+    "Milk chocolate  — 17.5г"
   ],
   "summary": {
-    "avg_kcal": 2150,
-    "avg_prot": 135.0,
-    "avg_fat": 45.3,
-    "avg_carb": 290.2
+    "avg_kcal": 1360,
+    "avg_prot": 72.4,
+    "avg_fat": 27.8,
+    "avg_carb": 200.7
   }
 }
