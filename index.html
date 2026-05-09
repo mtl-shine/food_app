@@ -1175,10 +1175,10 @@ ${prods}
     save();
     renderShoppingList();
     if(analyzeEl){
-      let html=`<div style="font-size:13px;margin-bottom:8px">${esc(data.analysis||'')}</div>`;
+      let html=`<div style="font-size:13px;margin-bottom:8px">${esc(typeof data.analysis==='string'?data.analysis:JSON.stringify(data.analysis)||'')}</div>`;
       if(data.gaps?.length){
         html+=`<div style="font-size:12px;color:var(--acc);margin-bottom:4px">Не хватает:</div>`;
-        data.gaps.forEach(g=>html+=`<div style="font-size:12px;color:var(--text2);padding:2px 0">• ${esc(g)}</div>`);
+        data.gaps.forEach(g=>html+=`<div style="font-size:12px;color:var(--text2);padding:2px 0">• ${esc(typeof g==='string'?g:JSON.stringify(g))}</div>`);
       }
       analyzeEl.innerHTML=html;
     }
@@ -3884,96 +3884,57 @@ function parseClaudeImport(){
   if(!text){alert('Вставь JSON от Claude');return;}
   try{
     const raw=text.replace(/```json|```/g,'').trim();
-    const start=raw.indexOf('{');const end=raw.lastIndexOf('}');
-    const data=JSON.parse(raw.slice(start,end+1));
-
+    const s=raw.indexOf('{');const e=raw.lastIndexOf('}');
+    const data=JSON.parse(raw.slice(s,e+1));
     let updated=[];
-    if(data.menu){
+
+    // Меню — ожидаем формат {"5":{"Завтрак":{...},"Ужин":{...}},"6":{...}}
+    if(data.menu&&typeof data.menu==='object'){
       if(!S.menu)S.menu={};
-      const todayIdx=new Date().getDay()===0?6:new Date().getDay()-1;
-      const mealNames=['Завтрак','Обед','Ужин','Перекус'];
-      const dayNames={
-        'понедельник':0,'вторник':1,'среда':2,'среду':2,'четверг':3,
-        'пятница':4,'пятницу':4,'суббота':5,'субботу':5,'воскресенье':6,'воскресению':6,
-        'сегодня':todayIdx,'завтра':(todayIdx+1)%7
-      };
-
-      // Нормализуем ключи блюд — убираем день недели
-      const normalizeMealKey=key=>{
-        const found=mealNames.find(m=>key.toLowerCase().includes(m.toLowerCase()));
-        return found||key;
-      };
-
-      // Определяем dayIndex из ключа
-      const getDayIdx=key=>{
-        const lower=key.toLowerCase();
-        for(const [name,idx] of Object.entries(dayNames)){
-          if(lower.includes(name))return idx;
+      Object.entries(data.menu).forEach(([k,v])=>{
+        const dayIdx=parseInt(k);
+        if(!isNaN(dayIdx)&&typeof v==='object'){
+          S.menu[dayIdx]={...v,
+            macros:v.macros||data.macros||{},
+            reason:v.reason||data.reason||'',
+            prepNote:v.prepNote||data.prepNote||'',
+            workoutNote:v.workoutNote||data.workoutNote||'',
+            warnings:v.warnings||data.warnings||[]
+          };
         }
-        return null;
-      };
-
-      if(typeof data.menu==='object'&&!Array.isArray(data.menu)){
-        const keys=Object.keys(data.menu);
-        const isIndexed=keys.every(k=>!isNaN(parseInt(k)));
-
-        if(isIndexed){
-          // Формат {0: {...}, 1: {...}}
-          Object.entries(data.menu).forEach(([k,v])=>{
-            const dayIdx=parseInt(k);
-            // Нормализуем ключи внутри дня
-            const normalized={};
-            Object.entries(v).forEach(([mk,mv])=>{
-              if(typeof mv==='object'&&mv.name)normalized[normalizeMealKey(mk)]=mv;
-              else normalized[mk]=mv;
-            });
-            S.menu[dayIdx]={...normalized,macros:normalized.macros||v.macros||data.macros,reason:normalized.reason||v.reason||data.reason||'',prepNote:normalized.prepNote||v.prepNote||data.prepNote||'',workoutNote:normalized.workoutNote||v.workoutNote||data.workoutNote||'',warnings:normalized.warnings||v.warnings||data.warnings||[]};
-          });
-        }else{
-          // Группируем блюда по дням
-          const dayGroups={};
-          Object.entries(data.menu).forEach(([key,val])=>{
-            if(typeof val!=='object'||!val.name)return;
-            const dayIdx=getDayIdx(key)??todayIdx;
-            if(!dayGroups[dayIdx])dayGroups[dayIdx]={};
-            dayGroups[dayIdx][normalizeMealKey(key)]=val;
-          });
-
-          // Если все блюда в одной группе todayIdx — значит нет дней в ключах
-          if(Object.keys(dayGroups).length===0){
-            // Все ключи — просто названия приёмов пищи
-            const normalized={};
-            Object.entries(data.menu).forEach(([k,v])=>{if(typeof v==='object'&&v.name)normalized[normalizeMealKey(k)]=v;});
-            S.menu[todayIdx]={...normalized,macros:data.macros,reason:data.reason||'',prepNote:data.prepNote||'',workoutNote:data.workoutNote||'',warnings:data.warnings||[]};
-          }else{
-            Object.entries(dayGroups).forEach(([dayIdx,meals])=>{
-              S.menu[parseInt(dayIdx)]={...meals,macros:data.macros,reason:data.reason||'',prepNote:data.prepNote||'',workoutNote:data.workoutNote||'',warnings:data.warnings||[]};
-            });
-          }
-        }
-      }
+      });
       updated.push('меню');
     }
+
+    // Список покупок
     if(data.shopping?.length){
-      if(!S.shoppingList)S.shoppingList=[];
-      data.shopping.forEach(item=>{if(item&&!S.shoppingList.includes(item))S.shoppingList.push(item);});
+      const items=data.shopping.map(i=>typeof i==='string'?i:JSON.stringify(i));
+      const replace=confirm(`Список покупок (${items.length} позиций):\n${items.slice(0,5).join('\n')}${items.length>5?'\n...':''}\n\nОК = Заменить | Отмена = Добавить`);
+      if(replace){S.shoppingList=[...items];}
+      else{if(!S.shoppingList)S.shoppingList=[];items.forEach(i=>{if(!S.shoppingList.includes(i))S.shoppingList.push(i);});}
       updated.push('список покупок');
     }
+
+    // Рекомендации ЖКТ
     if(data.gut_recommendations){
       if(!S.gutAnalysis)S.gutAnalysis=[];
-      S.gutAnalysis.unshift({date:new Date().toISOString(),text:data.gut_recommendations});
+      const text=typeof data.gut_recommendations==='string'?data.gut_recommendations:JSON.stringify(data.gut_recommendations);
+      S.gutAnalysis.unshift({date:new Date().toISOString(),text});
       updated.push('рекомендации ЖКТ');
     }
+
+    // Подозреваемые ЖКТ
     if(data.gut_suspects_update?.length){
       if(!S.gutSuspects)S.gutSuspects=[];
-      data.gut_suspects_update.forEach(s=>{
-        if(!S.gutSuspects.find(x=>x.name===s.name))S.gutSuspects.push(s);
-      });
+      data.gut_suspects_update.forEach(s=>{if(!S.gutSuspects.find(x=>x.name===s.name))S.gutSuspects.push(s);});
       updated.push('подозреваемые ЖКТ');
     }
+
+    // Заметки
     if(data.notes){
-      S.claudeNotes=(S.claudeNotes||[]);
-      S.claudeNotes.unshift({date:new Date().toISOString(),text:data.notes});
+      if(!S.claudeNotes)S.claudeNotes=[];
+      const noteText=typeof data.notes==='string'?data.notes:JSON.stringify(data.notes);
+      S.claudeNotes.unshift({date:new Date().toISOString(),text:noteText});
       updated.push('заметки');
     }
 
@@ -3985,6 +3946,7 @@ function parseClaudeImport(){
     alert('Ошибка разбора JSON: '+e.message);
   }
 }
+
 function resetYazioMapping(){
   const count=Object.keys(S.yazioMapping||{}).length;
   if(!confirm(`Сбросить таблицу сопоставлений (${count} записей)?\nПосле этого при следующей синхронизации Yazio снова покажет форму сопоставления.`))return;
@@ -5328,7 +5290,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.6.5';
+const APP_VERSION='2.6.6';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
