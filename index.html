@@ -394,6 +394,35 @@ select option{background:#1a1a2e;color:var(--text)}
       <button class="bs" onclick="toCalc()" style="margin-top:6px">🧮 Калькулятор КБЖУ</button>
     </div>
     <div class="card">
+      <div class="ct">Личный профиль</div>
+      <div class="ir">
+        <div class="ig"><label class="il">Пол</label>
+          <select id="s-gender" style="background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:9px;padding:9px;width:100%">
+            <option value="">—</option>
+            <option value="female">Женский</option>
+            <option value="male">Мужской</option>
+          </select>
+        </div>
+        <div class="ig"><label class="il">Дата рождения</label>
+          <input type="date" id="s-birthdate" style="width:100%;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:9px;padding:9px">
+        </div>
+      </div>
+      <div id="cycleFields" style="display:none">
+        <div class="ir">
+          <div class="ig"><label class="il">Начало последней менструации</label>
+            <input type="date" id="s-cycle-start">
+          </div>
+          <div class="ig"><label class="il">Длина цикла (дней)</label>
+            <input type="number" id="s-cycle-len" placeholder="28" min="21" max="35">
+          </div>
+        </div>
+        <div id="cyclePhaseInfo" style="font-size:12px;color:var(--text2);margin-top:4px"></div>
+      </div>
+      <div class="ig" style="margin-top:8px"><label class="il">Цель по микрофлоре/ЖКТ</label>
+        <textarea id="s-microbiome-goal" placeholder="Например: восстановление после дисбиоза, поддержание микрофлоры, снижение воспаления..." style="min-height:60px"></textarea>
+      </div>
+    </div>
+    <div class="card">
       <div class="ct">Постоянные пожелания</div>
       <textarea id="s-prefs" placeholder="Например: каждый день что-то сладкое, не люблю лук..."></textarea>
     </div>
@@ -420,9 +449,17 @@ select option{background:#1a1a2e;color:var(--text)}
     <button class="bs" onclick="mergeDuplicates()">🔗 Объединить дублирующиеся продукты</button>
     <button class="bs" onclick="bulkEnrich()" id="bulkEnrichBtn">✨ Обогатить все продукты (витамины/минералы)</button>
     <button class="bs" onclick="verifyNutrientsByComposition()" id="btnVerifyNutrients">🔬 Проверить нутриенты по составу</button>
-    <button class="bs" onclick="exportData()">📤 Экспорт данных (резервная копия)</button>
-    <button class="bs" onclick="document.getElementById('importFile').click()">📥 Импорт данных</button>
-    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    <div style="border-top:0.5px solid var(--cb);margin:8px 0;padding-top:8px">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">Обмен с Claude (Projects/чат):</div>
+      <button class="bs" onclick="exportForClaude()" style="border-color:rgba(129,140,248,0.4);color:#818cf8">📤 Экспорт для Claude</button>
+      <button class="bs" onclick="importFromClaude()" style="border-color:rgba(129,140,248,0.4);color:#818cf8;margin-top:4px">📥 Импорт от Claude</button>
+    </div>
+    <div style="border-top:0.5px solid var(--cb);margin:8px 0;padding-top:8px">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">Резервная копия:</div>
+      <button class="bs" onclick="exportData()">💾 Сохранить резервную копию</button>
+      <button class="bs" onclick="document.getElementById('importFile').click()" style="margin-top:4px">📂 Восстановить из копии</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    </div>
     <button class="bs" onclick="clearMenu()" style="color:var(--acc);border-color:rgba(233,69,96,0.3)">Сбросить меню</button>
   </div>
 </div>
@@ -3720,6 +3757,164 @@ async function showPendingMapping(){
   if(saved&&S.yazioData)await deductFromFridge(S.yazioData,[],false);
 }
 
+function updateCyclePhase(){
+  const cycleFields=document.getElementById('cycleFields');
+  const genderEl=document.getElementById('s-gender');
+  if(cycleFields&&genderEl)cycleFields.style.display=genderEl.value==='female'?'block':'none';
+  const info=document.getElementById('cyclePhaseInfo');
+  if(!info)return;
+  const startEl=document.getElementById('s-cycle-start');
+  const lenEl=document.getElementById('s-cycle-len');
+  if(!startEl?.value)return;
+  const start=new Date(startEl.value);
+  const len=parseInt(lenEl?.value)||28;
+  const today=new Date();
+  const dayOfCycle=Math.floor((today-start)/(864e5))+1;
+  const phase=dayOfCycle<=5?'🔴 Менструальная':dayOfCycle<=13?'🌱 Фолликулярная':dayOfCycle===14?'🌟 Овуляция':'🌙 Лютеиновая';
+  info.textContent=`Сейчас день ${dayOfCycle} цикла — ${phase}`;
+}
+
+function getCyclePhase(){
+  const g=S.settings;
+  if(g.gender!=='female'||!g.cycleStart)return null;
+  const start=new Date(g.cycleStart);
+  const len=g.cycleLen||28;
+  const today=new Date();
+  const dayOfCycle=Math.floor((today-start)/(864e5))+1;
+  const phase=dayOfCycle<=5?'Менструальная':dayOfCycle<=13?'Фолликулярная':dayOfCycle===14?'Овуляция':'Лютеиновая';
+  return{dayOfCycle,phase,len};
+}
+
+function getAge(){
+  if(!S.settings.birthdate)return null;
+  const birth=new Date(S.settings.birthdate);
+  const today=new Date();
+  let age=today.getFullYear()-birth.getFullYear();
+  if(today.getMonth()<birth.getMonth()||(today.getMonth()===birth.getMonth()&&today.getDate()<birth.getDate()))age--;
+  return age;
+}
+
+function exportForClaude(){
+  const g=S.settings;
+  const age=getAge();
+  const cycle=getCyclePhase();
+  const today=new Date().toISOString().split('T')[0];
+
+  const data={
+    export_date:today,
+    instructions:`Это данные из моего приложения планирования питания. Используй их для:
+- Составления меню на день/несколько дней с учётом всех продуктов, КБЖУ, нутриентов и сроков годности
+- Анализа ЖКТ дневника и рекомендаций
+- Составления списка покупок
+- Общих рекомендаций по питанию
+Ответ верни в виде JSON с полями: menu (если просят меню), shopping (список покупок), gut_recommendations, notes`,
+
+    profile:{
+      gender:g.gender||'не указан',
+      age:age?`${age} лет`:null,
+      birthdate:g.birthdate||null,
+      cycle_phase:cycle?`День ${cycle.dayOfCycle} из ${cycle.len}, фаза: ${cycle.phase}`:null,
+      kcal:g.kcal,prot:g.prot,fat:g.fat,carb:g.carb,
+      fiber:g.fiber,fat_ratio:g.fa,carb_ratio:g.ca,
+      meal_count:g.mealCount,
+      prefs:g.prefs||'',
+      microbiome_goal:g.microbiomeGoal||'',
+      workout_days:(g.workoutDays||[]).map(i=>['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i]),
+      workout_times:g.workoutTimes||{},
+    },
+
+    fridge:S.products.map(p=>({
+      name:p.name,weight:p.weight,expiry:p.expiry,opened:p.opened||false,
+      kcal:p.kcal,prot:p.prot,fat:p.fat,carb:p.carb,
+      fatSat:p.fatSat,fatMono:p.fatMono,fatPoly:p.fatPoly,
+      fiber:p.fiber,sugar:p.sugar,salt:p.salt,
+      vitA:p.vitA,vitB1:p.vitB1,vitB2:p.vitB2,vitB6:p.vitB6,vitB12:p.vitB12,
+      vitC:p.vitC,vitD:p.vitD,vitE:p.vitE,
+      fe:p.fe,ca:p.ca,mg:p.mg,zn:p.zn,
+      notes:p.notes||null,
+    })),
+
+    gut:{
+      log:S.gutLog||[],// все записи без сжатия
+      suspects:S.gutSuspects||[],
+      intolerances:S.gutIntolerances||[],
+      microbiome_goal:g.microbiomeGoal||'',
+    },
+
+    current_menu:S.menu||{},
+    dishes_liked:(S.dishes||[]).filter(d=>d.liked).map(d=>d.name),
+    dishes_disliked:(S.dishes||[]).filter(d=>d.disliked).map(d=>d.name),
+    away_periods:S.awayPeriods||[],
+    shopping_list:S.shoppingList||[],
+    wishes:S.wishes||[],
+  };
+
+  const json=JSON.stringify(data,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`nutrition_claude_export_${today}.json`;
+  a.click();URL.revokeObjectURL(url);
+  alert(`✓ Файл экспортирован.\n\nЗагрузи его в Claude Projects или вставь содержимое в чат.\nAPI ключ НЕ включён в экспорт.`);
+}
+
+function importFromClaude(){
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(26,26,46,0.97);z-index:100;padding:16px;box-sizing:border-box;overflow-y:auto';
+  overlay.innerHTML=`
+    <div style="font-size:15px;font-weight:600;margin-bottom:8px;padding-top:8px">📥 Импорт от Claude</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Вставь JSON ответ от Claude. Будут обновлены: меню, список покупок, рекомендации ЖКТ.</div>
+    <textarea id="claudeImportText" style="width:100%;min-height:200px;box-sizing:border-box;background:var(--cb2);color:var(--text);border:0.5px solid var(--cb);border-radius:8px;padding:10px;font-size:12px;font-family:monospace" placeholder='{"menu":{...},"shopping":[...],"gut_recommendations":"...","notes":"..."}'></textarea>
+    <button onclick="parseClaudeImport()" class="bp" style="width:100%;margin-top:12px">Импортировать</button>
+    <button onclick="this.closest('[style*=fixed]').remove()" class="bs" style="width:100%;margin-top:8px">Отмена</button>`;
+  document.body.appendChild(overlay);
+}
+
+function parseClaudeImport(){
+  const text=document.getElementById('claudeImportText')?.value?.trim();
+  if(!text){alert('Вставь JSON от Claude');return;}
+  try{
+    const raw=text.replace(/```json|```/g,'').trim();
+    const start=raw.indexOf('{');const end=raw.lastIndexOf('}');
+    const data=JSON.parse(raw.slice(start,end+1));
+
+    let updated=[];
+    if(data.menu){
+      if(!S.menu)S.menu={};
+      Object.entries(data.menu).forEach(([k,v])=>{S.menu[parseInt(k)]=v;});
+      updated.push('меню');
+    }
+    if(data.shopping?.length){
+      if(!S.shoppingList)S.shoppingList=[];
+      data.shopping.forEach(item=>{if(item&&!S.shoppingList.includes(item))S.shoppingList.push(item);});
+      updated.push('список покупок');
+    }
+    if(data.gut_recommendations){
+      if(!S.gutAnalysis)S.gutAnalysis=[];
+      S.gutAnalysis.unshift({date:new Date().toISOString(),text:data.gut_recommendations});
+      updated.push('рекомендации ЖКТ');
+    }
+    if(data.gut_suspects_update?.length){
+      if(!S.gutSuspects)S.gutSuspects=[];
+      data.gut_suspects_update.forEach(s=>{
+        if(!S.gutSuspects.find(x=>x.name===s.name))S.gutSuspects.push(s);
+      });
+      updated.push('подозреваемые ЖКТ');
+    }
+    if(data.notes){
+      S.claudeNotes=(S.claudeNotes||[]);
+      S.claudeNotes.unshift({date:new Date().toISOString(),text:data.notes});
+      updated.push('заметки');
+    }
+
+    save();
+    document.querySelector('[style*="position:fixed"][style*="z-index:100"]')?.remove();
+    renderMenu();
+    alert(`✓ Импортировано: ${updated.join(', ')||'ничего не найдено'}`);
+  }catch(e){
+    alert('Ошибка разбора JSON: '+e.message);
+  }
+}
 function resetYazioMapping(){
   const count=Object.keys(S.yazioMapping||{}).length;
   if(!confirm(`Сбросить таблицу сопоставлений (${count} записей)?\nПосле этого при следующей синхронизации Yazio снова покажет форму сопоставления.`))return;
@@ -4723,6 +4918,11 @@ function saveSettings(silent){
     fa:document.getElementById('s-fa').value||'30/70',
     ca:document.getElementById('s-ca').value||'70/30',
     prefs:document.getElementById('s-prefs').value||'',
+    gender:document.getElementById('s-gender').value||'',
+    birthdate:document.getElementById('s-birthdate').value||'',
+    cycleStart:document.getElementById('s-cycle-start').value||'',
+    cycleLen:parseInt(document.getElementById('s-cycle-len').value)||28,
+    microbiomeGoal:document.getElementById('s-microbiome-goal').value||'',
     apikey:document.getElementById('s-apikey').value||'',
     workoutTime:'18:00',// legacy fallback
     workoutTimes:S.settings.workoutTimes||{},
@@ -5007,6 +5207,16 @@ function initSettingsUI(){
   document.getElementById('s-fa').value=fs.fa||'30/70';
   document.getElementById('s-ca').value=fs.ca||'70/30';
   document.getElementById('s-prefs').value=fs.prefs||'';
+  document.getElementById('s-gender').value=fs.gender||'';
+  document.getElementById('s-birthdate').value=fs.birthdate||'';
+  document.getElementById('s-cycle-start').value=fs.cycleStart||'';
+  document.getElementById('s-cycle-len').value=fs.cycleLen||28;
+  document.getElementById('s-microbiome-goal').value=fs.microbiomeGoal||'';
+  // Показываем поля цикла только для женщин
+  const cycleFields=document.getElementById('cycleFields');
+  if(cycleFields)cycleFields.style.display=fs.gender==='female'?'block':'none';
+  // Вычисляем фазу цикла
+  updateCyclePhase();
   document.getElementById('s-apikey').value=fs.apikey||'';
   document.getElementById('s-ghuser').value=fs.githubUser||'';
   document.getElementById('s-ghrepo').value=fs.githubRepo||'';
@@ -5048,7 +5258,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.6.1';
+const APP_VERSION='2.6.2';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
