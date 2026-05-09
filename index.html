@@ -3881,7 +3881,20 @@ function parseClaudeImport(){
     let updated=[];
     if(data.menu){
       if(!S.menu)S.menu={};
-      Object.entries(data.menu).forEach(([k,v])=>{S.menu[parseInt(k)]=v;});
+      const todayIdx=new Date().getDay()===0?6:new Date().getDay()-1;
+      // Если menu содержит dayIndex — используем его
+      // Если menu содержит названия приёмов напрямую — записываем в сегодня
+      if(typeof data.menu==='object'&&!Array.isArray(data.menu)){
+        const keys=Object.keys(data.menu);
+        const isIndexed=keys.every(k=>!isNaN(parseInt(k)));
+        if(isIndexed){
+          // Формат {0: {...}, 1: {...}}
+          Object.entries(data.menu).forEach(([k,v])=>{S.menu[parseInt(k)]={...v,macros:v.macros||data.macros,reason:v.reason||data.reason,prepNote:v.prepNote||data.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||'',warnings:v.warnings||data.warnings||[]};});
+        }else{
+          // Формат {"Завтрак": {...}, "Ужин": {...}} — записываем в сегодня
+          S.menu[todayIdx]={...data.menu,macros:data.macros,reason:data.reason||'',prepNote:data.prepNote||'',workoutNote:data.workoutNote||'',warnings:data.warnings||[]};
+        }
+      }
       updated.push('меню');
     }
     if(data.shopping?.length){
@@ -5258,7 +5271,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.6.2';
+const APP_VERSION='2.6.3';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
