@@ -1,4 +1,4 @@
-const VERSION = '2.6.3';
+const VERSION = '2.6.5';
 const CACHE = 'nutrition-' + VERSION;
 
 self.addEventListener('install', e => {

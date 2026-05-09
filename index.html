@@ -3807,7 +3807,10 @@ function exportForClaude(){
 - Анализа ЖКТ дневника и рекомендаций
 - Составления списка покупок
 - Общих рекомендаций по питанию
-Ответ верни в виде JSON с полями: menu (если просят меню), shopping (список покупок), gut_recommendations, notes`,
+
+Поле yazio.diary содержит фактически съеденное за последние дни с граммовками блюд.
+Учитывай это при составлении меню — что уже съедено сегодня, какие нутриенты закрыты, что ещё нужно добрать.
+Ответ верни в виде JSON с полями: menu, macros, shopping, gut_recommendations, notes`,
 
     profile:{
       gender:g.gender||'не указан',
@@ -3847,6 +3850,12 @@ function exportForClaude(){
     away_periods:S.awayPeriods||[],
     shopping_list:S.shoppingList||[],
     wishes:S.wishes||[],
+
+    yazio:S.yazioData?{
+      synced_at:S.yazioData.synced_at,
+      diary:S.yazioData.diary||[],
+      summary:S.yazioData.summary||{},
+    }:null,
   };
 
   const json=JSON.stringify(data,null,2);
@@ -3882,17 +3891,65 @@ function parseClaudeImport(){
     if(data.menu){
       if(!S.menu)S.menu={};
       const todayIdx=new Date().getDay()===0?6:new Date().getDay()-1;
-      // Если menu содержит dayIndex — используем его
-      // Если menu содержит названия приёмов напрямую — записываем в сегодня
+      const mealNames=['Завтрак','Обед','Ужин','Перекус'];
+      const dayNames={
+        'понедельник':0,'вторник':1,'среда':2,'среду':2,'четверг':3,
+        'пятница':4,'пятницу':4,'суббота':5,'субботу':5,'воскресенье':6,'воскресению':6,
+        'сегодня':todayIdx,'завтра':(todayIdx+1)%7
+      };
+
+      // Нормализуем ключи блюд — убираем день недели
+      const normalizeMealKey=key=>{
+        const found=mealNames.find(m=>key.toLowerCase().includes(m.toLowerCase()));
+        return found||key;
+      };
+
+      // Определяем dayIndex из ключа
+      const getDayIdx=key=>{
+        const lower=key.toLowerCase();
+        for(const [name,idx] of Object.entries(dayNames)){
+          if(lower.includes(name))return idx;
+        }
+        return null;
+      };
+
       if(typeof data.menu==='object'&&!Array.isArray(data.menu)){
         const keys=Object.keys(data.menu);
         const isIndexed=keys.every(k=>!isNaN(parseInt(k)));
+
         if(isIndexed){
           // Формат {0: {...}, 1: {...}}
-          Object.entries(data.menu).forEach(([k,v])=>{S.menu[parseInt(k)]={...v,macros:v.macros||data.macros,reason:v.reason||data.reason,prepNote:v.prepNote||data.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||'',warnings:v.warnings||data.warnings||[]};});
+          Object.entries(data.menu).forEach(([k,v])=>{
+            const dayIdx=parseInt(k);
+            // Нормализуем ключи внутри дня
+            const normalized={};
+            Object.entries(v).forEach(([mk,mv])=>{
+              if(typeof mv==='object'&&mv.name)normalized[normalizeMealKey(mk)]=mv;
+              else normalized[mk]=mv;
+            });
+            S.menu[dayIdx]={...normalized,macros:normalized.macros||v.macros||data.macros,reason:normalized.reason||v.reason||data.reason||'',prepNote:normalized.prepNote||v.prepNote||data.prepNote||'',workoutNote:normalized.workoutNote||v.workoutNote||data.workoutNote||'',warnings:normalized.warnings||v.warnings||data.warnings||[]};
+          });
         }else{
-          // Формат {"Завтрак": {...}, "Ужин": {...}} — записываем в сегодня
-          S.menu[todayIdx]={...data.menu,macros:data.macros,reason:data.reason||'',prepNote:data.prepNote||'',workoutNote:data.workoutNote||'',warnings:data.warnings||[]};
+          // Группируем блюда по дням
+          const dayGroups={};
+          Object.entries(data.menu).forEach(([key,val])=>{
+            if(typeof val!=='object'||!val.name)return;
+            const dayIdx=getDayIdx(key)??todayIdx;
+            if(!dayGroups[dayIdx])dayGroups[dayIdx]={};
+            dayGroups[dayIdx][normalizeMealKey(key)]=val;
+          });
+
+          // Если все блюда в одной группе todayIdx — значит нет дней в ключах
+          if(Object.keys(dayGroups).length===0){
+            // Все ключи — просто названия приёмов пищи
+            const normalized={};
+            Object.entries(data.menu).forEach(([k,v])=>{if(typeof v==='object'&&v.name)normalized[normalizeMealKey(k)]=v;});
+            S.menu[todayIdx]={...normalized,macros:data.macros,reason:data.reason||'',prepNote:data.prepNote||'',workoutNote:data.workoutNote||'',warnings:data.warnings||[]};
+          }else{
+            Object.entries(dayGroups).forEach(([dayIdx,meals])=>{
+              S.menu[parseInt(dayIdx)]={...meals,macros:data.macros,reason:data.reason||'',prepNote:data.prepNote||'',workoutNote:data.workoutNote||'',warnings:data.warnings||[]};
+            });
+          }
         }
       }
       updated.push('меню');
@@ -5271,7 +5328,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.6.3';
+const APP_VERSION='2.6.5';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
