@@ -2494,12 +2494,16 @@ ${goodLog}
 
 ПРОДУКТЫ В ХОЛОДИЛЬНИКЕ: ${S.products.slice(0,20).map(p=>p.name).join(', ')}
 
+ФАКТИЧЕСКИ СЪЕДЕННОЕ ПО ДАТАМ (из Yazio — используй для сопоставления с симптомами):
+${S.yazioData?.diary?.length?S.yazioData.diary.slice(-14).map(d=>`${d.date}: ${(d.dishes||[]).join(', ')}`).join('\n'):'нет данных Yazio'}
+
 ЗАДАЧА:
 1. Определи УРОВЕНЬ проблемы (продукт / нутриент / количество / время / скорость / стресс / сочетание)
-2. Выдвини конкретные гипотезы с объяснением
-3. Предложи что проверить и как
-4. Укажи подозреваемые продукты или паттерны
-5. Если симптомы серьёзные или частые — рекомендуй врача
+2. ОБЯЗАТЕЛЬНО сопоставляй симптомы с фактически съеденным по Yazio в тот же день — не с плановым меню
+3. Выдвини конкретные гипотезы с объяснением
+4. Предложи что проверить и как
+5. Укажи подозреваемые продукты или паттерны
+6. Если симптомы серьёзные или частые — рекомендуй врача
 
 ТОЛЬКО JSON:
 {"summary":"краткий вывод","level":"продукт|нутриент|количество|скорость|стресс|время|сочетание","hypotheses":[{"text":"гипотеза","confidence":"высокая|средняя|низкая","action":"что делать"}],"suspects":[{"name":"название","type":"product|nutrient|pattern","hypothesis":"почему подозревается"}],"doctorAdvice":true|false,"doctorReason":"почему к врачу если true"}`}],
@@ -3915,6 +3919,34 @@ function parseClaudeImport(){
       updated.push('список покупок');
     }
 
+    // Записи ЖКТ
+    if(data.gut_log?.length){
+      if(!S.gutLog)S.gutLog=[];
+      let added=0;
+      data.gut_log.forEach(entry=>{
+        // Не дублируем если уже есть запись за этот день и приём
+        const exists=S.gutLog.some(g=>g.date===entry.date&&g.meal===entry.meal&&g.status===entry.status);
+        if(!exists){
+          S.gutLog.push({
+            id:Date.now()+Math.random(),
+            date:entry.date||new Date().toISOString().split('T')[0],
+            meal:entry.meal||'—',
+            status:entry.status||'ok',
+            symptoms:entry.symptoms||[],
+            intensity:entry.intensity||null,
+            timeAfter:entry.timeAfter||'',
+            context:entry.context||'обычный',
+            volume:entry.volume||null,
+            speed:entry.speed||null,
+            note:entry.note||'',
+            time:entry.time||'',
+          });
+          added++;
+        }
+      });
+      if(added>0)updated.push(`ЖКТ записи (${added})`);
+    }
+
     // Рекомендации ЖКТ
     if(data.gut_recommendations){
       if(!S.gutAnalysis)S.gutAnalysis=[];
@@ -5290,7 +5322,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.6.6';
+const APP_VERSION='2.6.7';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
