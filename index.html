@@ -1889,10 +1889,22 @@ function weekDays(){
   const t=new Date(),dow=t.getDay(),mon=new Date(t);
   mon.setDate(t.getDate()-(dow===0?6:dow-1));
   return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);
-    return{date:d,label:DAYS[i],short:DS[i],str:d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})};});
+    return{date:d,label:DAYS[i],short:DS[i],str:d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}),dateStr:d.toISOString().split('T')[0]};});
 }
+function getDateStr(d){return d instanceof Date?d.toISOString().split('T')[0]:d;}
 function isToday(d){const t=new Date();return d.getDate()===t.getDate()&&d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear();}
 function isPast(d){const t=new Date();t.setHours(0,0,0,0);return d<t;}
+function isWorkoutDay(dateOrIdx){
+  const wdays=S.settings.workoutDays||[];
+  if(typeof dateOrIdx==='number')return wdays.includes(dateOrIdx);
+  const d=new Date(dateOrIdx);const dow=d.getDay();const idx=dow===0?6:dow-1;
+  return wdays.includes(idx);
+}
+function getWorkoutTimeForDate(dateStr){
+  const d=new Date(dateStr);const dow=d.getDay();const idx=dow===0?6:dow-1;
+  const times=S.settings.workoutTimes||{};
+  return{time:times[idx]||'',fasted:times['fasted_'+idx]||false,idx};
+}
 function expSt(s){if(!s)return'ok';const diff=(new Date(s)-new Date())/864e5;if(diff<0)return'bad';if(diff<3)return'warn';return'ok';}
 function fmtExp(s){if(!s)return'—';return new Date(s).toLocaleDateString('ru-RU',{day:'numeric',month:'short'});}
 function parseExp(s){
@@ -2056,26 +2068,43 @@ function renderMenu(){
   checkGutPending();
   if(!S.menu)S.menu={};
   const days=weekDays();const meals=getMeals();
-  const todayIdx=new Date().getDay()===0?6:new Date().getDay()-1;
+  const todayStr=new Date().toISOString().split('T')[0];
+
+  // Мигрируем старый формат dayIndex → дата если нужно
+  const needsMigration=Object.keys(S.menu).some(k=>!isNaN(parseInt(k))&&parseInt(k)<7&&k.length<5);
+  if(needsMigration){
+    const newMenu={};
+    days.forEach((d,i)=>{if(S.menu[i])newMenu[d.dateStr]=S.menu[i];});
+    S.menu=newMenu;save();
+  }
 
   let html=`<div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:8px">
     <button onclick="subScreen('away','Вне дома','menu')" style="background:none;border:0.5px solid var(--cb);color:var(--text2);padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer">🏃 Вне дома</button>
   </div>`;
 
-  days.forEach((d,i)=>{
-    if(i<todayIdx)return;// пропускаем прошедшие дни
-    const dm=S.menu[i]||{};const tod=i===todayIdx;const wo=isWorkoutDay(i);
-    const gutDay=S.gutLog.filter(g=>g.date===d.date.toISOString().split('T')[0]);
+  // Показываем сегодня + 13 дней вперёд
+  const upcoming=[];
+  for(let i=0;i<14;i++){
+    const d=new Date();d.setDate(d.getDate()+i);
+    const ds=d.toISOString().split('T')[0];
+    const dow=d.getDay();const idx=dow===0?6:dow-1;
+    upcoming.push({date:d,dateStr:ds,idx,label:DAYS[idx],short:DS[idx],str:d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})});
+  }
+
+  upcoming.forEach(d=>{
+    const dm=S.menu[d.dateStr]||{};
+    const tod=d.dateStr===todayStr;
+    const wo=isWorkoutDay(d.dateStr);
+    const gutDay=S.gutLog.filter(g=>g.date===d.dateStr);
     const hasBad=gutDay.some(g=>g.status==='bad');
-    const dateStr=d.date.toISOString().split('T')[0];
-    const awayMeals=getAwayMealsForDate(dateStr);
+    const awayMeals=getAwayMealsForDate(d.dateStr);
     const allAway=awayMeals.length>0&&meals.every(m=>awayMeals.includes(m));
     const hasMenu=meals.some(t=>dm[t]);
 
-    html+=`<div class="dc${tod?' today':''}${wo?' workout':''}" onclick="showDay(${i})">
+    html+=`<div class="dc${tod?' today':''}${wo?' workout':''}" onclick="showDay('${d.dateStr}')">
       <div class="dh">
         <span class="dn">${d.short}${tod?', сегодня':''}</span>
-        <span class="dd">${d.str}</span>
+        <span class="dd">${d.label}</span>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
           ${tod?'<span class="dbg dbg-today">сегодня</span>':''}
           ${wo?'<span class="dbg dbg-wo">💪 тренировка</span>':''}
@@ -2085,9 +2114,11 @@ function renderMenu(){
       </div>
       <div>`;
 
-    if(!hasMenu){
+    if(dm._loading){
+      html+=`<div style="padding:12px;text-align:center;color:var(--text2);font-size:13px"><span class="spin"></span> Составляю меню...</div>`;
+    }else if(!hasMenu){
       html+=`<div style="padding:10px 0" onclick="event.stopPropagation()">
-        <button class="bp" onclick="startGenerateDay(${i})" style="width:100%;padding:10px;font-size:13px;background:#3b82f6;border-color:#3b82f6">✨ Составить меню на день</button>
+        <button class="bp" onclick="startGenerateDay('${d.dateStr}')" style="width:100%;padding:10px;font-size:13px;background:#3b82f6;border-color:#3b82f6">✨ Составить меню на день</button>
       </div>`;
     }else{
       meals.forEach(t=>{
@@ -2612,14 +2643,17 @@ function clearSuspect(idx){
 }
 
 /* ── DAY DETAIL ── */
-function showDay(idx){
-  S.currentDayIdx=idx;S.prevScreen='menu';
-  const days=weekDays();const d=days[idx];
-  document.getElementById('hTitle').textContent=`${d.label}, ${d.str}`;
+function showDay(dateStr){
+  S.currentDayIdx=dateStr;S.prevScreen='menu';
+  const d=new Date(dateStr);
+  const dow=d.getDay();const idx=dow===0?6:dow-1;
+  const dayLabel=DAYS[idx];
+  const dateFormatted=d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'});
+  document.getElementById('hTitle').textContent=`${dayLabel}, ${dateFormatted}`;
   document.getElementById('backBtn').style.display='block';
   document.getElementById('mainNav').style.display='none';
   document.getElementById('refreshBtn').style.display='none';
-  const dm=S.menu?.[idx]||{};const wo=isWorkoutDay(idx);const meals=getMeals();const g=S.settings;
+  const dm=S.menu?.[dateStr]||{};const wo=isWorkoutDay(dateStr);const meals=getMeals();const g=S.settings;
   let html='';
   if(dm.warnings?.length){html+=`<div class="card">`;dm.warnings.forEach(w=>html+=`<div class="na">⚠ ${esc(w)}</div>`);html+=`</div>`;}
   if(wo){
@@ -2700,8 +2734,8 @@ function showDay(idx){
     html+=`</div>`;
   }
   // ЖКТ за день
-  const dateStr=d.date.toISOString().split('T')[0];
-  const gutDay=S.gutLog.filter(g=>g.date===dateStr);
+  const gutDateStr=dateStr;
+  const gutDay=S.gutLog.filter(g=>g.date===gutDateStr);
   if(gutDay.length){
     html+=`<div class="card"><div class="ct">ЖКТ за день</div>`;
     gutDay.forEach(g=>html+=`<div class="gut-entry"><div class="gut-time">${g.time||''} · ${g.meal}</div><div class="gut-text ${g.status==='ok'?'gut-status-ok':'gut-status-bad'}">${g.status==='ok'?'✓ Ок':'⚠ '+esc(g.note)}</div></div>`);
@@ -2709,8 +2743,8 @@ function showDay(idx){
   }
   html+=`<div class="card"><div class="ct">Скорректировать день</div>
     <textarea id="dayWish" placeholder="Хочу пасту на обед, добавь яйца на завтрак..." style="margin-bottom:9px;min-height:60px"></textarea>
-    <button class="bp" id="adjBtn" onclick="adjustDay(${idx})">↺ Пересоставить этот день</button>
-    <button class="bs" onclick="startGenerateDay(${idx})" style="margin-top:8px">✨ Составить заново</button>
+    <button class="bp" id="adjBtn" onclick="adjustDay('${dateStr}')">↺ Пересоставить этот день</button>
+    <button class="bs" onclick="startGenerateDay('${dateStr}')" style="margin-top:8px">✨ Составить заново</button>
   </div>`;
   document.getElementById('dayDetailContent').innerHTML=html;
   show('day-detail');
@@ -2734,24 +2768,25 @@ function logActual(dayIdx,mealType){
 }
 
 /* ── GENERATE MENU ── */
-function startGenerateDay(idx){
-  const days=weekDays();const d=days[idx];
-  // Показываем попап с пожеланиями
-  const existing=S.menu?.[idx];
+function startGenerateDay(dateStr){
+  const d=new Date(dateStr);
+  const dow=d.getDay();const idx=dow===0?6:dow-1;
+  const dayLabel=DAYS[idx];
+  const dateLabel=d.toLocaleDateString('ru-RU',{day:'numeric',month:'long',weekday:'long'});
   const popup=document.createElement('div');
   popup.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
   popup.innerHTML=`<div style="background:var(--cb2);border-radius:14px;padding:20px;width:100%;max-width:400px">
-    <div style="font-size:15px;font-weight:600;margin-bottom:8px">✨ Меню на ${d.label}</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:8px">✨ Меню на ${dateLabel}</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Пожелания на этот день (необязательно):</div>
     <textarea id="dayGenWish" rows="4" placeholder="Например: хочу что-нибудь с рыбой, или использовать фарш..."
       style="width:100%;box-sizing:border-box;min-height:90px;margin-bottom:12px"></textarea>
-    <button onclick="generateDayMenu(${idx})" class="bp" style="width:100%;margin-bottom:8px">Составить</button>
+    <button onclick="generateDayMenu('${dateStr}')" class="bp" style="width:100%;margin-bottom:8px">Составить</button>
     <button onclick="this.closest('[style*=fixed]').remove()" class="bs" style="width:100%">Отмена</button>
   </div>`;
   document.body.appendChild(popup);
 }
 
-async function generateDayMenu(idx){
+async function generateDayMenu(dateStr){
   const popup=document.querySelector('[style*="position:fixed"][style*="z-index:100"]');
   const wish=document.getElementById('dayGenWish')?.value.trim()||'';
   if(popup)popup.remove();
@@ -2759,26 +2794,22 @@ async function generateDayMenu(idx){
   if(!S.settings.apikey){alert('Нужен API ключ');return;}
   if(!S.menu)S.menu={};
 
-  // Показываем спиннер в карточке дня
-  const days=weekDays();const d=days[idx];
-  const el=document.getElementById('menuContent');
-  const dayCard=el?.querySelector(`.dc:nth-child(${idx+2})`);// +2 из-за шапки
+  const d=new Date(dateStr);
+  const dow=d.getDay();const idx=dow===0?6:dow-1;
+  const dateLabel=d.toLocaleDateString('ru-RU',{day:'numeric',month:'long',weekday:'long'});
 
-  // Временно показываем загрузку в renderMenu
-  S.menu[idx]={_loading:true};renderMenu();
+  S.menu[dateStr]={_loading:true};renderMenu();
 
   const g=S.settings;const meals=getMeals();
-  const todayIdx=new Date().getDay()===0?6:new Date().getDay()-1;
   const todayStr=new Date().toISOString().split('T')[0];
-  const wo=isWorkoutDay(idx);
-  const times=g.workoutTimes||{};
+  const wo=isWorkoutDay(dateStr);
+  const {time:woTime,fasted:woFasted}=getWorkoutTimeForDate(dateStr);
   const mealCount=meals.length;
   const kcalPerMeal=Math.round(g.kcal/mealCount);
   const protPerMeal=Math.round(g.prot/mealCount);
   const fatPerMeal=Math.round(g.fat/mealCount);
   const carbPerMeal=Math.round(g.carb/mealCount);
 
-  // Группируем продукты
   const grouped={};
   S.products.forEach(p=>{
     const key=p.name.toLowerCase();
@@ -2788,24 +2819,21 @@ async function generateDayMenu(idx){
     if(p.expiry&&(!grouped[key].expiry||p.expiry<grouped[key].expiry))grouped[key].expiry=p.expiry;
   });
 
-  // Вычитаем расход из уже составленных дней
   const inventory={};
   Object.values(grouped).forEach(p=>{inventory[p.name.toLowerCase()]=p.weight;});
-  for(let di=todayIdx;di<idx;di++){
-    const dm=S.menu[di];if(!dm||dm._loading)continue;
+  Object.entries(S.menu).forEach(([ds,dm])=>{
+    if(ds>=dateStr||!dm||dm._loading)return;
     meals.forEach(meal=>{
       const m=dm[meal];if(!m?.name)return;
       const matches=[...m.name.matchAll(/([а-яёА-ЯЁa-zA-ZäöüÄÖÜß\s]+?)\s+(\d+)\s*г/g)];
       matches.forEach(match=>{
-        const prodName=match[1].trim().toLowerCase();
-        const grams=parseInt(match[2]);
+        const prodName=match[1].trim().toLowerCase();const grams=parseInt(match[2]);
         const key=Object.keys(inventory).find(k=>k.includes(prodName)||prodName.includes(k.split(' ')[0]));
         if(key)inventory[key]=Math.max(0,(inventory[key]||0)-grams);
       });
     });
-  }
+  });
 
-  // Умная выборка
   const allProds=Object.values(grouped).filter(p=>p.weight>=20);
   const in7days=new Date();in7days.setDate(in7days.getDate()+7);
   const in7Str=in7days.toISOString().split('T')[0];
@@ -2819,11 +2847,8 @@ async function generateDayMenu(idx){
   addTop([...allProds].filter(p=>p.prot).sort((a,b)=>(b.prot||0)/((b.fat||0)+1)-(a.prot||0)/((a.fat||0)+1)),5);
   addTop([...allProds].filter(p=>p.fatPoly||p.name.match(/lachs|salmon|форел|тунец|thun|чиа|chia|лён|flax/i)).sort((a,b)=>(b.fatPoly||0)-(a.fatPoly||0)),3);
   addTop([...allProds].filter(p=>p.fiber).sort((a,b)=>(b.fiber||0)-(a.fiber||0)),4);
-  ['vitC','vitD','vitB12','fe','ca','mg'].forEach(v=>{
-    addTop([...allProds].filter(p=>p[v]).sort((a,b)=>(b[v]||0)-(a[v]||0)),2);
-  });
-  const remaining=[...allProds].filter(p=>!selected.has(p.name.toLowerCase()))
-    .sort((a,b)=>(a.expiry||'9999').localeCompare(b.expiry||'9999'));
+  ['vitC','vitD','vitB12','fe','ca','mg'].forEach(v=>{addTop([...allProds].filter(p=>p[v]).sort((a,b)=>(b[v]||0)-(a[v]||0)),2);});
+  const remaining=[...allProds].filter(p=>!selected.has(p.name.toLowerCase())).sort((a,b)=>(a.expiry||'9999').localeCompare(b.expiry||'9999'));
   remaining.forEach(p=>{if(selected.size<80)selected.add(p.name.toLowerCase());});
 
   const selectedProds=allProds
@@ -2833,12 +2858,9 @@ async function generateDayMenu(idx){
     .sort((a,b)=>(a.expiry||'9999').localeCompare(b.expiry||'9999'));
 
   const urgentToday=selectedProds.filter(p=>p.expiry&&p.expiry<=in2Str);
-  const urgentBlock=urgentToday.length?
-    `\n⚠ ОБЯЗАТЕЛЬНО ИСПОЛЬЗОВАТЬ СЕГОДНЯ:\n`+urgentToday.map(p=>`${p.name}: ${p.weight}г, до ${p.expiry}`).join('\n'):
-    '';
-
+  const urgentBlock=urgentToday.length?`\n⚠ ОБЯЗАТЕЛЬНО ИСПОЛЬЗОВАТЬ:\n`+urgentToday.map(p=>`${p.name}: ${p.weight}г, до ${p.expiry}`).join('\n'):'';
   const excluded=Object.values(grouped).filter(p=>p.weight<20).map(p=>p.name);
-  const excludedLine=excluded.length?`\nТакже доступны (малые количества): ${excluded.slice(0,15).join(', ')}`:'' ;
+  const excludedLine=excluded.length?`\nТакже доступны (малые количества): ${excluded.slice(0,15).join(', ')}`:'';
 
   const prods=selectedProds.map(p=>{
     const expired=p.expiry&&p.expiry<todayStr;
@@ -2852,74 +2874,50 @@ async function generateDayMenu(idx){
     return`${prefix}${p.name}: ${p.weight}г, до ${p.expiry||'?'}, ${p.kcal||0}ккал/100г, Б${p.prot||0}/Ж${p.fat||0}/У${p.carb||0}${extra.length?', '+extra.join(', '):''}`;
   }).join('\n');
 
-  // Информация о тренировке
   let woNote='';
   if(wo){
-    const fasted=times['fasted_'+idx];
-    const time=times[idx];
-    if(fasted)woNote=`\nТРЕНИРОВКА НАТОЩАК: завтрак = посттрен (белок${protPerMeal*1.2|0}г+, быстрые У)`;
-    else if(time)woNote=`\nТРЕНИРОВКА в ${time}: приём за 2-3ч до = предтрен (сложные У${carbPerMeal*1.3|0}г+), приём после = посттрен (белок${protPerMeal*1.2|0}г+)`;
+    if(woFasted)woNote=`\nТРЕНИРОВКА НАТОЩАК: завтрак = посттрен`;
+    else if(woTime)woNote=`\nТРЕНИРОВКА в ${woTime}: до = предтрен (У${Math.round(carbPerMeal*1.3)}г+), после = посттрен (Б${Math.round(protPerMeal*1.2)}г+)`;
   }
 
-  const dayName=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][idx];
-  const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-5).map(g=>`${g.meal}: ${g.note||'дискомфорт'}`).join('; ')||'нет';
-  const intolerances=(S.gutIntolerances||[]).map(i=>i.name).join(', ')||'нет';
   const liked=S.dishes.filter(d=>d.liked&&d.type!=='product').map(d=>d.name).join(', ')||'нет';
   const disliked=S.dishes.filter(d=>d.disliked&&d.type!=='product').map(d=>d.name).join(', ')||'нет';
   const likedProds=S.dishes.filter(d=>d.liked&&d.type==='product').map(d=>d.name).join(', ')||'нет';
   const dislikedProds=S.dishes.filter(d=>d.disliked&&d.type==='product').map(d=>d.name).join(', ')||'нет';
+  const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-5).map(g=>`${g.meal}: ${g.note||'дискомфорт'}`).join('; ')||'нет';
+  const intolerances=(S.gutIntolerances||[]).map(i=>i.name).join(', ')||'нет';
 
-  const prompt=`Составь меню на ${dayName} (dayIndex=${idx}), ${d.date.toLocaleDateString('ru-RU')}.
+  const mealsFmt=meals.map(m=>`"${m}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`).join(',');
+  const prompt=`Составь меню на ${dateLabel}.
 Приёмов пищи: ${mealCount} (${meals.join(', ')}).
 
-━━━ КБЖУ (СТРОГО ±5%) ━━━
-День: ${g.kcal}ккал | Б${g.prot}г | Ж${g.fat}г | У${g.carb}г | клетч${g.fiber||31}г
-Приём: ~${kcalPerMeal}ккал | Б~${protPerMeal}г | Ж~${fatPerMeal}г | У~${carbPerMeal}г
-Насыщ./ненасыщ.: ${g.fa} | Сложн./простые У: ${g.ca}
-SELF-CHECK: посчитай сумму КБЖУ всех приёмов. Если отклонение >5% — скорректируй.
+КБЖУ (СТРОГО ±5%): ${g.kcal}ккал | Б${g.prot}г | Ж${g.fat}г | У${g.carb}г | клетч${g.fiber||31}г
+На приём: ~${kcalPerMeal}ккал | Б~${protPerMeal}г | Ж~${fatPerMeal}г | У~${carbPerMeal}г
+Насыщ./ненасыщ.: ${g.fa} | Сложн./простые: ${g.ca}
 
-━━━ ПРИОРИТЕТ ПРОДУКТОВ ━━━
-1. Просроченные и срок ≤2 дней → использовать ОБЯЗАТЕЛЬНО
-2. Срок ≤7 дней → использовать в первую очередь
-3. Остальные → для добора нутриентов
+ПРИОРИТЕТ: 1.Просроченные/≤2дн→сегодня 2.≤7дн→первоочередно 3.Остальные→добор нутриентов
 
-━━━ ПРОДУКТЫ (актуальные остатки) ━━━
+ПРОДУКТЫ:
 ${prods}${excludedLine}${urgentBlock}
 
-━━━ ОБЯЗАТЕЛЬНЫЕ ТРЕБОВАНИЯ ━━━
-1. КБЖУ строго ±5%
-2. ПОСТОЯННЫЕ ПОЖЕЛАНИЯ каждый день: "${g.prefs||'нет'}"
-3. Пожелание на этот день: "${wish||'нет'}"
-4. Стоп-лист: ${disliked}
-5. Непереносимости: ${intolerances}
-6. ЖКТ-проблемы: ${gutBad}${woNote}
+ТРЕБОВАНИЯ: КБЖУ±5%, пожелания: "${g.prefs||'нет'}", сегодня: "${wish||'нет'}"
+Любимые блюда: ${liked} | Стоп блюда: ${disliked}
+Любимые продукты: ${likedProds} | Стоп продукты: ${dislikedProds}
+Непереносимости: ${intolerances} | ЖКТ: ${gutBad}${woNote}
 
-━━━ НУТРИЕНТНАЯ ПОЛНОЦЕННОСТЬ ━━━
-Обеспечь: витC (с Fe), витD (с жирами), Ca (не с Fe), омега-3, клетчатка ${g.fiber||31}г
-Синергия: витC+Fe→усвоение×2, Ca+Fe→разноси по приёмам, кофе/чай+Fe→через 1ч
-
-ТОЛЬКО JSON:
-{"dayIndex":${idx},"meals":{"${meals[0]}":{"name":"Название (продукт1 Xг, продукт2 Xг)","kcal":0,"prot":0,"fat":0,"carb":0}${mealCount>=2?`,"${meals[1]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${mealCount>=3?`,"${meals[2]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${mealCount>=4?`,"${meals[3]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}}, "macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"macrosCheck":"X/X/X/X отклонение X%","reason":"нутриенты дня","prepNote":"конкретные временные указания или пусто","workoutNote":"${wo?'конкретная граммовка':''}","warnings":[],"shopping":[]}`;
+ТОЛЬКО JSON (ключ = дата):
+{"${dateStr}":{${mealsFmt},"macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"macrosCheck":"X/X/X/X отклон X%","reason":"...","prepNote":"...","workoutNote":"${wo?'...':''}","warnings":[],"shopping":[]}}`;
 
   const resp=await claude([{role:'user',content:prompt}],'Ты диетолог-нутрициолог. Только JSON без markdown.',2500);
-  if(!resp||typeof resp==='object'){
-    S.menu[idx]={};renderMenu();
-    alert('Ошибка: '+(resp?.error||'нет ответа'));return;
-  }
+  if(!resp||typeof resp==='object'){S.menu[dateStr]={};renderMenu();alert('Ошибка: '+(resp?.error||'нет ответа'));return;}
   try{
     const raw=resp.replace(/```json|```/g,'').trim();
     const data=JSON.parse(raw.slice(raw.indexOf('{'),raw.lastIndexOf('}')+1));
-    S.menu[idx]={...data.meals,macros:data.macros,reason:data.reason,prepNote:data.prepNote||'',workoutNote:data.workoutNote,warnings:data.warnings||[]};
-    // Сохраняем рекомендации покупок
-    if(data.shopping?.length){
-      if(!S.shoppingList)S.shoppingList=[];
-      data.shopping.forEach(item=>{if(item&&!S.shoppingList.includes(item))S.shoppingList.push(item);});
-    }
+    const dayData=data[dateStr]||data;
+    S.menu[dateStr]={...dayData,macros:dayData.macros||{},reason:dayData.reason||'',prepNote:dayData.prepNote||'',workoutNote:dayData.workoutNote||'',warnings:dayData.warnings||[]};
+    if(dayData.shopping?.length){if(!S.shoppingList)S.shoppingList=[];dayData.shopping.forEach(item=>{if(item&&!S.shoppingList.includes(item))S.shoppingList.push(item);});}
     save();renderMenu();
-  }catch(e){
-    S.menu[idx]={};renderMenu();
-    alert('Ошибка разбора ответа');
-  }
+  }catch(e){S.menu[dateStr]={};renderMenu();alert('Ошибка разбора ответа');}
 }
 
 function startGenerateMenu(){
@@ -2934,8 +2932,8 @@ async function confirmAndGenerateMenu(){
     S.wishes=[...lines];save();
   }
   goBack();
-  const todayIdx=new Date().getDay()===0?6:new Date().getDay()-1;
-  await generateDayMenu(todayIdx);
+  const todayStr=new Date().toISOString().split('T')[0];
+  await generateDayMenu(todayStr);
 }
 
 async function generateWeekMenu(){
@@ -3245,104 +3243,83 @@ ${yazio}${yazioProfile}
 }
 
 /* ── ADJUST DAY ── */
-async function adjustDay(idx){
+async function adjustDay(dateStr){
   const wish=document.getElementById('dayWish')?.value?.trim();
   if(!wish){alert('Напиши пожелание');return;}
   const btn=document.getElementById('adjBtn');
   if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>Пересоставляю...';}
 
-  const days=weekDays();const d=days[idx];const g=S.settings;const meals=getMeals();
-  const todayIdx=new Date().getDay()===0?6:new Date().getDay()-1;
-  const wo=isWorkoutDay(idx);
-
-  // Определяем расход продуктов до пересоставляемого дня
-  // Спрашиваем какой последний приём пищи сегодня уже был (если пересоставляем будущее)
-  let lastMealToday=null;
-  if(idx>todayIdx){
-    const mealOptions=['Ничего','Завтрак',...(meals.length>=2?['Обед']:[]),(meals.length>=2?'Ужин':'')].filter(Boolean);
-    const answer=prompt(`Какой последний приём пищи сегодня уже был?\n${mealOptions.map((m,i)=>`${i}: ${m}`).join('\n')}\n\nВведи номер:`);
-    const answerIdx=parseInt(answer);
-    if(!isNaN(answerIdx)&&answerIdx>0&&answerIdx<mealOptions.length){
-      lastMealToday=mealOptions[answerIdx];
-    }
-  }
-
-  // Считаем что уже израсходовано из холодильника (из меню между сегодня и пересоставляемым днём)
-  const plannedConsumption={};// {productName: totalGrams}
-  if(S.menu){
-    for(let i=todayIdx;i<idx;i++){
-      const dm=S.menu[i];if(!dm)continue;
-      const isToday=i===todayIdx;
-      meals.forEach(meal=>{
-        // Для сегодняшнего дня — пропускаем приёмы которые уже были
-        if(isToday&&lastMealToday){
-          const mealIdx=meals.indexOf(meal);
-          const lastIdx=meals.indexOf(lastMealToday);
-          if(mealIdx<=lastIdx)return;// уже было
-        }
-        const m=dm[meal];
-        if(m?.name){
-          // Парсим граммовку из названия блюда
-          const matches=[...m.name.matchAll(/(\w[\w\s]*?)\s+(\d+)г/g)];
-          matches.forEach(match=>{
-            const prod=match[1].trim();
-            const grams=parseInt(match[2]);
-            plannedConsumption[prod]=(plannedConsumption[prod]||0)+grams;
-          });
-        }
-      });
-    }
-  }
-
-  // Строим список продуктов с учётом планового расхода
+  const g=S.settings;const meals=getMeals();
+  const d=new Date(dateStr);const dow=d.getDay();const idx=dow===0?6:dow-1;
   const todayStr=new Date().toISOString().split('T')[0];
+  const wo=isWorkoutDay(dateStr);
+  const {time:woTime,fasted:woFasted}=getWorkoutTimeForDate(dateStr);
+  const dateLabel=d.toLocaleDateString('ru-RU',{day:'numeric',month:'long',weekday:'long'});
+
+  const gutIntolerances=(S.gutIntolerances||[]).map(i=>i.name).join(', ')||'нет';
+
+  // Актуальные остатки с учётом предыдущих дней
+  const grouped={};
+  S.products.forEach(p=>{
+    const key=p.name.toLowerCase();
+    if(!grouped[key]){grouped[key]={...p,weight:0};}
+    grouped[key].weight+=p.weight||0;
+  });
+  const inventory={};
+  Object.values(grouped).forEach(p=>{inventory[p.name.toLowerCase()]=p.weight;});
+  Object.entries(S.menu||{}).forEach(([ds,dm])=>{
+    if(ds>=dateStr||!dm||dm._loading)return;
+    meals.forEach(meal=>{
+      const m=dm[meal];if(!m?.name)return;
+      const matches=[...m.name.matchAll(/([а-яёА-ЯЁa-zA-ZäöüÄÖÜß\s]+?)\s+(\d+)\s*г/g)];
+      matches.forEach(match=>{
+        const prodName=match[1].trim().toLowerCase();const grams=parseInt(match[2]);
+        const key=Object.keys(inventory).find(k=>k.includes(prodName)||prodName.includes(k.split(' ')[0]));
+        if(key)inventory[key]=Math.max(0,(inventory[key]||0)-grams);
+      });
+    });
+  });
+
   const adjustedProds=S.products.map(p=>{
-    const consumed=plannedConsumption[p.name]||0;
-    const remaining=Math.max(0,p.weight-consumed);
+    const consumed=0;
+    const remaining=Math.max(0,(inventory[p.name.toLowerCase()]||0));
     if(remaining<=0)return null;
     const expired=p.expiry&&p.expiry<todayStr;
-    return`${expired?'⚠ ПРОСРОЧЕН: ':''}${p.name}: ${remaining}г доступно (из ${p.weight}г, запланировано -${consumed}г), до ${p.expiry||'?'}`;
+    return`${expired?'⚠ ПРОСРОЧЕН: ':''}${p.name}: ${remaining}г, до ${p.expiry||'?'}`;
   }).filter(Boolean).join('\n');
 
   const disliked=S.dishes.filter(d=>d.disliked).map(d=>d.name).join(', ')||'нет';
-  const gutIntolerances=(S.gutIntolerances||[]).map(i=>i.name).join(', ')||'нет';
 
-  const resp=await claude([{role:'user',content:`Пересоставь ${d.label} (dayIndex=${idx}).
+  const mealsFmt=meals.map(m=>`"${m}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`).join(',');
+  const resp=await claude([{role:'user',content:`Пересоставь меню на ${dateLabel}.
 Пожелание: "${wish}"
 
-ПРОДУКТЫ с учётом планового расхода предыдущих дней:
+ПРОДУКТЫ с учётом расхода:
 ${adjustedProds}
 
 ЦЕЛИ: ${g.kcal}ккал (±5%), Б${g.prot}г, Ж${g.fat}г, У${g.carb}г
-НА ПРИЁМ (~${meals.length}): ~${Math.round(g.kcal/meals.length)}ккал
 ПРИЁМОВ: ${meals.length} (${meals.join(', ')})
-СТОП: ${disliked}
-НЕПЕРЕНОСИМОСТИ: ${gutIntolerances}
+СТОП: ${disliked} | НЕПЕРЕНОСИМОСТИ: ${gutIntolerances}
 ПОСТОЯННЫЕ ПОЖЕЛАНИЯ: "${g.prefs||'нет'}"
-${wo?`ТРЕНИРОВКА в ${g.workoutTime} — учти предтрен/посттрен.`:''}
+${wo?(woFasted?'ТРЕНИРОВКА НАТОЩАК: завтрак=посттрен':`ТРЕНИРОВКА в ${woTime}`):''}
 
-ЛОГИКА:
-1. Если пожелание вписывается — включи.
-2. Если нет — предложи облегчённую версию или укажи в warnings.
-3. Не корректируй другие дни.
-
-ТОЛЬКО JSON: {"updatedDays":[{"dayIndex":${idx},"meals":{"${meals[0]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}${meals[1]?`,"${meals[1]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${meals[2]?`,"${meals[2]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}${meals[3]?`,"${meals[3]}":{"name":"...","kcal":0,"prot":0,"fat":0,"carb":0}`:''}}, "macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"reason":"...","prepNote":"...","workoutNote":"...","warnings":[]}],"globalWarnings":[]}`}],
+ТОЛЬКО JSON (ключ = дата):
+{"${dateStr}":{${mealsFmt},"macros":{"kcal":0,"prot":0,"fat":0,"carb":0},"reason":"...","prepNote":"...","workoutNote":"...","warnings":[]}}`}],
   'Ты диетолог. Только JSON.',2000);
 
-  if(btn){btn.disabled=false;btn.innerHTML='Пересоставить этот день';}
+  if(btn){btn.disabled=false;btn.innerHTML='↺ Пересоставить этот день';}
   if(!resp||typeof resp==='object'){alert('Ошибка: '+(resp?.error||'нет ответа'));return;}
   try{
-    const data=JSON.parse(resp.replace(/```json|```/g,'').trim());
-    data.updatedDays.forEach(ud=>{
-      S.menu[ud.dayIndex]={...ud.meals,macros:ud.macros,reason:ud.reason,prepNote:ud.prepNote||'',workoutNote:ud.workoutNote,warnings:ud.warnings||[]};
-    });
-    S.wishes.push(`${d.label}: ${wish}`);save();
-    if(data.globalWarnings?.length)alert('⚠ '+data.globalWarnings.join('\n'));
-    showDay(idx);
+    const raw=resp.replace(/```json|```/g,'').trim();
+    const data=JSON.parse(raw.slice(raw.indexOf('{'),raw.lastIndexOf('}')+1));
+    const dayData=data[dateStr]||data;
+    S.menu[dateStr]={...dayData,macros:dayData.macros||{},reason:dayData.reason||'',prepNote:dayData.prepNote||'',workoutNote:dayData.workoutNote||'',warnings:dayData.warnings||[]};
+    S.wishes.push(`${dateLabel}: ${wish}`);save();
+    if(dayData.warnings?.length)alert('⚠ '+dayData.warnings.join('\n'));
+    showDay(dateStr);
   }catch(e){alert('Ошибка разбора');}
 }
 
-/* ── CHAT ── */
 function renderChatHistory(){
   const msgs=document.getElementById('chatMessages');
   if(!msgs)return;
@@ -3919,15 +3896,18 @@ function parseClaudeImport(){
     if(data.menu&&typeof data.menu==='object'){
       if(!S.menu)S.menu={};
       Object.entries(data.menu).forEach(([k,v])=>{
-        const dayIdx=parseInt(k);
-        if(!isNaN(dayIdx)&&typeof v==='object'){
-          S.menu[dayIdx]={...v,
-            macros:v.macros||data.macros||{},
-            reason:v.reason||data.reason||'',
-            prepNote:v.prepNote||data.prepNote||'',
-            workoutNote:v.workoutNote||data.workoutNote||'',
-            warnings:v.warnings||data.warnings||[]
-          };
+        if(typeof v==='object'){
+          // k может быть датой "2026-05-11" или dayIndex "0"-"6"
+          let dateKey=k;
+          if(k.length<=1||(!isNaN(parseInt(k))&&parseInt(k)<7)){
+            // Это dayIndex — конвертируем в дату текущей/следующей недели
+            const dayIdx=parseInt(k);
+            const today=new Date();const todayDow=today.getDay();const todayIdx=todayDow===0?6:todayDow-1;
+            const diff=dayIdx>=todayIdx?dayIdx-todayIdx:7-(todayIdx-dayIdx);
+            const target=new Date(today);target.setDate(today.getDate()+diff);
+            dateKey=target.toISOString().split('T')[0];
+          }
+          S.menu[dateKey]={...v,macros:v.macros||data.macros||{},reason:v.reason||data.reason||'',prepNote:v.prepNote||data.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||'',warnings:v.warnings||data.warnings||[]};
         }
       });
       updated.push('меню');
@@ -5361,7 +5341,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.6.8';
+const APP_VERSION='2.7.0';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
