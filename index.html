@@ -266,7 +266,8 @@ select option{background:#1a1a2e;color:var(--text)}
       <div style="display:flex;gap:5px;margin-bottom:10px">
         <button onclick="setDF('all',this)" class="addb" style="flex:1" id="df-all">Все</button>
         <button onclick="setDF('liked',this)" class="addb" style="flex:1;border-color:var(--cb);color:var(--text2)" id="df-liked">❤ Любимые</button>
-        <button onclick="setDF('dis',this)" class="addb" style="flex:1;border-color:var(--cb);color:var(--text2)" id="df-dis">👎 Стоп</button>
+        <button onclick="setDF('dis',this)" class="addb" style="flex:1;border-color:var(--cb);color:var(--text2)" id="df-dis">🚫 Стоп</button>
+        <button onclick="setDF('products',this)" class="addb" style="flex:1;border-color:var(--cb);color:var(--text2)" id="df-products">🥦 Продукты</button>
       </div>
       <div class="sx"><span class="sxi">🔍</span><input type="text" id="dishSearch" placeholder="Поиск..." oninput="renderDishes()"></div>
       <div id="dishesList"></div>
@@ -2267,18 +2268,36 @@ function renderDishes(){
   let list=[...S.dishes];
   if(S.dishFilter==='liked')list=list.filter(d=>d.liked);
   else if(S.dishFilter==='dis')list=list.filter(d=>d.disliked);
+  else if(S.dishFilter==='products')list=list.filter(d=>d.type==='product');
   if(q)list=list.filter(d=>d.name.toLowerCase().includes(q));
-  list.sort((a,b)=>a.name.localeCompare(b.name,'ru'));
-  if(!list.length){el.innerHTML='<p style="font-size:12px;color:var(--text2);padding:6px 0">Нет блюд.</p>';return;}
-  el.innerHTML=list.map(d=>`<div class="dii">
-    <div class="dii-inf">
-      <div class="dii-nm">${esc(d.name)}</div>
-      <div class="dii-mt">${d.kcal?d.kcal+' ккал':''}${d.note?' · '+esc(d.note.substring(0,30)):''}</div>
-    </div>
-    <button class="lk" onclick="toggleLike(${d.id},event)">${d.liked?'❤':'🤍'}</button>
-    <button class="lk" onclick="toggleDis(${d.id},event)">${d.disliked?'👎':'👍'}</button>
-    <button class="xb" onclick="delDish(${d.id},event)">×</button>
-  </div>`).join('');
+  list.sort((a,b)=>{
+    if(a.liked&&!b.liked)return -1;if(!a.liked&&b.liked)return 1;
+    if(a.disliked&&!b.disliked)return 1;if(!a.disliked&&b.disliked)return -1;
+    return a.name.localeCompare(b.name,'ru');
+  });
+  if(!list.length){el.innerHTML='<p style="font-size:12px;color:var(--text2);padding:6px 0">Нет записей.</p>';return;}
+  el.innerHTML=list.map(d=>{
+    const typeLabel=d.type==='product'?'<span style="font-size:9px;color:var(--text2);border:0.5px solid var(--cb);border-radius:4px;padding:1px 4px;margin-right:4px">продукт</span>':'';
+    const state=d.liked?'❤':d.disliked?'🚫':'🤍';
+    const stateColor=d.liked?'color:#e85d75':d.disliked?'color:var(--acc)':'color:var(--text2)';
+    return`<div class="dii">
+      <div class="dii-inf">
+        <div class="dii-nm">${typeLabel}${esc(d.name)}</div>
+        <div class="dii-mt">${d.kcal?d.kcal+' ккал':''}${d.note?' · '+esc(d.note.substring(0,30)):''}</div>
+      </div>
+      <button class="lk" style="${stateColor}" onclick="cycleDishState(${d.id},event)" title="Нажми для смены: нейтральное → ❤ любимое → 🚫 стоп">${state}</button>
+      <button class="xb" onclick="delDish(${d.id},event)">×</button>
+    </div>`;
+  }).join('');
+}
+
+function cycleDishState(id,e){
+  e.stopPropagation();
+  const d=S.dishes.find(x=>x.id===id);if(!d)return;
+  if(!d.liked&&!d.disliked){d.liked=true;d.disliked=false;}
+  else if(d.liked){d.liked=false;d.disliked=true;}
+  else{d.liked=false;d.disliked=false;}
+  save();renderDishes();
 }
 function toggleLike(id,e){e.stopPropagation();const d=S.dishes.find(x=>x.id===id);if(!d)return;d.liked=!d.liked;if(d.liked)d.disliked=false;save();renderDishes();}
 function toggleDis(id,e){e.stopPropagation();const d=S.dishes.find(x=>x.id===id);if(!d)return;d.disliked=!d.disliked;if(d.disliked)d.liked=false;save();renderDishes();}
@@ -2286,7 +2305,7 @@ function delDish(id,e){e.stopPropagation();if(!confirm('Удалить?'))return
 function addDish(){
   const name=document.getElementById('d-name').value.trim();if(!name){alert('Укажи название');return;}
   if(S.dishes.find(d=>d.name.toLowerCase()===name.toLowerCase())){alert('Уже есть');return;}
-  S.dishes.push({id:Date.now(),name,ingredients:document.getElementById('d-ing').value.trim(),
+  S.dishes.push({id:Date.now(),name,type:'dish',ingredients:document.getElementById('d-ing').value.trim(),
     kcal:parseFloat(document.getElementById('d-kcal').value)||0,prot:parseFloat(document.getElementById('d-prot').value)||0,
     fat:parseFloat(document.getElementById('d-fat').value)||0,carb:parseFloat(document.getElementById('d-carb').value)||0,
     note:document.getElementById('d-note').value.trim(),liked:true,disliked:false});
@@ -2295,12 +2314,12 @@ function addDish(){
 function clearDForm(){['d-name','d-ing','d-kcal','d-prot','d-fat','d-carb','d-note'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
 function dishFromMenu(name,kcal,prot,fat,carb){
   if(!S.dishes.find(d=>d.name.toLowerCase()===name.toLowerCase())){
-    S.dishes.push({id:Date.now()+Math.random(),name,ingredients:'',kcal,prot,fat,carb,note:'',liked:true,disliked:false});save();
+    S.dishes.push({id:Date.now()+Math.random(),name,type:'dish',ingredients:'',kcal,prot,fat,carb,note:'',liked:true,disliked:false});save();
   }
 }
 function dislikeMenu(name){
   let d=S.dishes.find(x=>x.name.toLowerCase()===name.toLowerCase());
-  if(!d){d={id:Date.now(),name,ingredients:'',kcal:0,prot:0,fat:0,carb:0,note:'',liked:false,disliked:true};S.dishes.push(d);}
+  if(!d){d={id:Date.now(),name,type:'dish',ingredients:'',kcal:0,prot:0,fat:0,carb:0,note:'',liked:false,disliked:true};S.dishes.push(d);}
   else{d.disliked=true;d.liked=false;}
   save();alert('Добавлено в стоп-лист.');
 }
@@ -2845,8 +2864,10 @@ async function generateDayMenu(idx){
   const dayName=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][idx];
   const gutBad=S.gutLog.filter(g=>g.status==='bad').slice(-5).map(g=>`${g.meal}: ${g.note||'дискомфорт'}`).join('; ')||'нет';
   const intolerances=(S.gutIntolerances||[]).map(i=>i.name).join(', ')||'нет';
-  const liked=S.dishes.filter(d=>d.liked).map(d=>d.name).join(', ')||'нет';
-  const disliked=S.dishes.filter(d=>d.disliked).map(d=>d.name).join(', ')||'нет';
+  const liked=S.dishes.filter(d=>d.liked&&d.type!=='product').map(d=>d.name).join(', ')||'нет';
+  const disliked=S.dishes.filter(d=>d.disliked&&d.type!=='product').map(d=>d.name).join(', ')||'нет';
+  const likedProds=S.dishes.filter(d=>d.liked&&d.type==='product').map(d=>d.name).join(', ')||'нет';
+  const dislikedProds=S.dishes.filter(d=>d.disliked&&d.type==='product').map(d=>d.name).join(', ')||'нет';
 
   const prompt=`Составь меню на ${dayName} (dayIndex=${idx}), ${d.date.toLocaleDateString('ru-RU')}.
 Приёмов пищи: ${mealCount} (${meals.join(', ')}).
@@ -3057,8 +3078,10 @@ async function generateWeekMenu(){
   }).join('\n');
   const excluded=Object.values(grouped).filter(p=>p.weight<20).map(p=>p.name);
   const excludedLine=excluded.length?`\nТакже доступны (малые количества): ${excluded.slice(0,20).join(', ')}${excluded.length>20?` и ещё ${excluded.length-20}`:''}`:'';
-  const liked=S.dishes.filter(d=>d.liked).map(d=>d.name).join(', ')||'нет';
-  const disliked=S.dishes.filter(d=>d.disliked).map(d=>d.name).join(', ')||'нет';
+  const liked=S.dishes.filter(d=>d.liked&&d.type!=='product').map(d=>d.name).join(', ')||'нет';
+  const disliked=S.dishes.filter(d=>d.disliked&&d.type!=='product').map(d=>d.name).join(', ')||'нет';
+  const likedProds=S.dishes.filter(d=>d.liked&&d.type==='product').map(d=>d.name).join(', ')||'нет';
+  const dislikedProds=S.dishes.filter(d=>d.disliked&&d.type==='product').map(d=>d.name).join(', ')||'нет';
   // Формируем информацию о тренировках по дням
   const times=g.workoutTimes||{};
   const woInfo=(g.workoutDays||[]).map(i=>{
@@ -3918,6 +3941,22 @@ function parseClaudeImport(){
       else{if(!S.shoppingList)S.shoppingList=[];items.forEach(i=>{if(!S.shoppingList.includes(i))S.shoppingList.push(i);});}
       updated.push('список покупок');
     }
+
+    // Любимые и нелюбимые блюда/продукты
+    const addToDishesList=(names,liked,type)=>{
+      if(!names?.length)return;
+      if(!S.dishes)S.dishes=[];
+      names.forEach(name=>{
+        const str=typeof name==='string'?name:JSON.stringify(name);
+        const existing=S.dishes.find(d=>d.name.toLowerCase()===str.toLowerCase());
+        if(existing){existing.liked=liked;existing.disliked=!liked;if(type)existing.type=type;}
+        else S.dishes.push({id:Date.now()+Math.random(),name:str,type:type||'dish',ingredients:'',kcal:0,prot:0,fat:0,carb:0,note:'',liked,disliked:!liked});
+      });
+    };
+    if(data.liked_dishes?.length){addToDishesList(data.liked_dishes,true,'dish');updated.push('любимые блюда');}
+    if(data.disliked_dishes?.length){addToDishesList(data.disliked_dishes,false,'dish');updated.push('стоп блюда');}
+    if(data.liked_products?.length){addToDishesList(data.liked_products,true,'product');updated.push('любимые продукты');}
+    if(data.disliked_products?.length){addToDishesList(data.disliked_products,false,'product');updated.push('стоп продукты');}
 
     // Записи ЖКТ
     if(data.gut_log?.length){
@@ -5322,7 +5361,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.6.7';
+const APP_VERSION='2.6.8';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
