@@ -2121,7 +2121,9 @@ function renderMenu(){
         <button class="bp" onclick="startGenerateDay('${d.dateStr}')" style="width:100%;padding:10px;font-size:13px;background:#3b82f6;border-color:#3b82f6">✨ Составить меню на день</button>
       </div>`;
     }else{
-      meals.forEach(t=>{
+      const mealOrder=['Завтрак','Обед','Ужин','Перекус'];
+      const allDayMeals=mealOrder.filter(t=>dm[t]?.name);
+      allDayMeals.forEach(t=>{
         if(awayMeals.includes(t)){
           html+=`<div class="ml2" style="opacity:0.5"><span class="mt2">${t}</span><span>🏃 вне дома</span></div>`;
         }else{
@@ -2663,19 +2665,24 @@ function showDay(dateStr){
     </div>`;
   }
   html+=`<div class="card"><div class="ct">Блюда дня</div>`;
-  meals.forEach(t=>{const m=dm[t];if(m){
-    const isPreWo=wo&&t===meals[0]; // первый приём — предтрен условно
+  // Показываем все приёмы из данных дня (не только из getMeals())
+  const mealOrder=['Завтрак','Обед','Ужин','Перекус'];
+  const allMealsInDay=mealOrder.filter(t=>dm[t]?.name);
+  // Добавляем любые другие ключи которые могут быть приёмами
+  Object.keys(dm).forEach(t=>{if(dm[t]?.name&&!allMealsInDay.includes(t))allMealsInDay.push(t);});
+  allMealsInDay.forEach((t,i)=>{const m=dm[t];if(!m)return;
+    const isPreWo=wo&&i===0;
     html+=`<div class="dm">
+      <div class="dmh"><span class="dmt" style="font-size:11px;color:var(--text2);margin-bottom:2px">${esc(t)}</span></div>
       <div class="dmh"><span class="dmn">${esc(m.name)}</span><span class="dmk">${m.kcal||0} ккал</span></div>
       <div><span class="tag tg">Б: ${m.prot||0}г</span><span class="tag tr">Ж: ${m.fat||0}г</span><span class="tag tp">У: ${m.carb||0}г</span>${isPreWo?'<span class="tag tb">предтрен</span>':''}</div>
       <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
         <button onclick="dishFromMenu('${esc(m.name)}',${m.kcal||0},${m.prot||0},${m.fat||0},${m.carb||0});alert('Добавлено в любимые!')" style="font-size:10px;background:none;border:0.5px solid rgba(74,222,128,0.4);color:#4ade80;padding:3px 9px;border-radius:20px;cursor:pointer">❤ В любимые</button>
         <button onclick="dislikeMenu('${esc(m.name)}')" style="font-size:10px;background:none;border:0.5px solid rgba(233,69,96,0.4);color:var(--acc);padding:3px 9px;border-radius:20px;cursor:pointer">👎 Не нравится</button>
-        <button onclick="logActual(${idx},'${esc(t)}')" style="font-size:10px;background:none;border:0.5px solid var(--cb);color:var(--text2);padding:3px 9px;border-radius:20px;cursor:pointer">✏ Факт. вес</button>
         <button onclick="showRecipe('${esc(m.name)}','')" style="font-size:10px;background:none;border:0.5px solid rgba(245,166,35,0.4);color:var(--acc2);padding:3px 9px;border-radius:20px;cursor:pointer">📖 Рецепт</button>
       </div>
     </div>`;
-  }});
+  });
   html+=`</div>`;
   if(dm.reason)html+=`<div class="card"><div class="ct">Почему именно это?</div><div class="rb">${esc(dm.reason)}</div></div>`;
   if(dm.prepNote)html+=`<div class="card" style="border-color:rgba(251,191,36,0.3)"><div class="ct">⏰ Подготовить заранее</div><div class="rb" style="color:var(--text2)">${esc(dm.prepNote)}</div></div>`;
@@ -3907,7 +3914,16 @@ function parseClaudeImport(){
             const target=new Date(today);target.setDate(today.getDate()+diff);
             dateKey=target.toISOString().split('T')[0];
           }
-          S.menu[dateKey]={...v,macros:v.macros||data.macros||{},reason:v.reason||data.reason||'',prepNote:v.prepNote||data.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||'',warnings:v.warnings||data.warnings||[]};
+          const mealNames=['Завтрак','Обед','Ужин','Перекус'];
+          const hasMeals=mealNames.some(m=>v[m]?.name);
+          const existing=S.menu[dateKey]||{};
+          if(hasMeals){
+            // Есть блюда — полная замена
+            S.menu[dateKey]={...v,macros:v.macros||data.macros||{},reason:v.reason||data.reason||'',prepNote:v.prepNote||data.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||'',warnings:v.warnings||data.warnings||[]};
+          }else{
+            // Нет блюд — мёржим метаданные не трогая блюда
+            S.menu[dateKey]={...existing,...v,macros:v.macros||data.macros||existing.macros||{},reason:v.reason||data.reason||existing.reason||'',prepNote:v.prepNote||data.prepNote||existing.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||existing.workoutNote||'',warnings:v.warnings||data.warnings||existing.warnings||[]};
+          }
         }
       });
       updated.push('меню');
@@ -5341,7 +5357,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.7.0';
+const APP_VERSION='2.7.1';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
