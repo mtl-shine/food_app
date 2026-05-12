@@ -3852,7 +3852,7 @@ function exportForClaude(){
     // Yazio — только последние 14 дней
     yazio:S.yazioData?{
       synced_at:S.yazioData.synced_at,
-      diary:(S.yazioData.diary||[]).slice(-14),
+      diary:(S.yazioData.diary||[]).slice(0,14),
       summary:S.yazioData.summary||{},
     }:null,
   };
@@ -5345,7 +5345,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.7.2';
+const APP_VERSION='2.7.3';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
