@@ -462,6 +462,7 @@ select option{background:#1a1a2e;color:var(--text)}
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
     </div>
     <button class="bs" onclick="clearMenu()" style="color:var(--acc);border-color:rgba(233,69,96,0.3)">Сбросить меню</button>
+    <button class="bs" onclick="if(confirm('Очистить список пожеланий?')){S.wishes=[];save();alert('Пожелания очищены.')}" style="color:var(--acc);border-color:rgba(233,69,96,0.3)">Очистить пожелания</button>
   </div>
 </div>
 
@@ -2657,25 +2658,29 @@ function showDay(dateStr){
   document.getElementById('refreshBtn').style.display='none';
   const dm=S.menu?.[dateStr]||{};const wo=isWorkoutDay(dateStr);const meals=getMeals();const g=S.settings;
   let html='';
+
+  // prepNote — вверху над блюдами
+  if(dm.prepNote)html+=`<div class="card" style="border-color:rgba(251,191,36,0.3)"><div class="ct">⏰ Подготовить заранее</div><div class="rb" style="color:var(--text2)">${esc(dm.prepNote)}</div></div>`;
+
   if(dm.warnings?.length){html+=`<div class="card">`;dm.warnings.forEach(w=>html+=`<div class="na">⚠ ${esc(w)}</div>`);html+=`</div>`;}
   if(wo){
     html+=`<div class="card" style="border-color:rgba(129,140,248,0.4)">
       <div class="ct">💪 День тренировки</div>
-      <div style="font-size:13px;color:var(--text2);line-height:1.6">${esc(dm.workoutNote||'Питание скорректировано под тренировку: больше углеводов перед тренировкой, белок после.')}</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.6">${esc(dm.workoutNote||'Питание скорректировано под тренировку.')}</div>
     </div>`;
   }
   html+=`<div class="card"><div class="ct">Блюда дня</div>`;
-  // Показываем все приёмы из данных дня (не только из getMeals())
   const mealOrder=['Завтрак','Обед','Ужин','Перекус'];
   const allMealsInDay=mealOrder.filter(t=>dm[t]?.name);
-  // Добавляем любые другие ключи которые могут быть приёмами
   Object.keys(dm).forEach(t=>{if(dm[t]?.name&&!allMealsInDay.includes(t))allMealsInDay.push(t);});
   allMealsInDay.forEach((t,i)=>{const m=dm[t];if(!m)return;
     const isPreWo=wo&&i===0;
+    const recipe=dm.recipes?.[t]||'';
     html+=`<div class="dm">
       <div class="dmh"><span class="dmt" style="font-size:11px;color:var(--text2);margin-bottom:2px">${esc(t)}</span></div>
       <div class="dmh"><span class="dmn">${esc(m.name)}</span><span class="dmk">${m.kcal||0} ккал</span></div>
       <div><span class="tag tg">Б: ${m.prot||0}г</span><span class="tag tr">Ж: ${m.fat||0}г</span><span class="tag tp">У: ${m.carb||0}г</span>${isPreWo?'<span class="tag tb">предтрен</span>':''}</div>
+      ${recipe?`<div style="margin-top:8px;font-size:12px;line-height:1.7;color:var(--text2);white-space:pre-wrap;border-top:0.5px solid var(--cb);padding-top:8px">${esc(recipe)}</div>`:''}
       <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
         <button onclick="dishFromMenu('${esc(m.name)}',${m.kcal||0},${m.prot||0},${m.fat||0},${m.carb||0});alert('Добавлено в любимые!')" style="font-size:10px;background:none;border:0.5px solid rgba(74,222,128,0.4);color:#4ade80;padding:3px 9px;border-radius:20px;cursor:pointer">❤ В любимые</button>
         <button onclick="dislikeMenu('${esc(m.name)}')" style="font-size:10px;background:none;border:0.5px solid rgba(233,69,96,0.4);color:var(--acc);padding:3px 9px;border-radius:20px;cursor:pointer">👎 Не нравится</button>
@@ -2685,7 +2690,6 @@ function showDay(dateStr){
   });
   html+=`</div>`;
   if(dm.reason)html+=`<div class="card"><div class="ct">Почему именно это?</div><div class="rb">${esc(dm.reason)}</div></div>`;
-  if(dm.prepNote)html+=`<div class="card" style="border-color:rgba(251,191,36,0.3)"><div class="ct">⏰ Подготовить заранее</div><div class="rb" style="color:var(--text2)">${esc(dm.prepNote)}</div></div>`;
 
   // Витамины и минералы дня
   const nutriNorms={
@@ -3813,20 +3817,9 @@ function exportForClaude(){
 
   const data={
     export_date:today,
-    instructions:`Это данные из моего приложения планирования питания. Используй их для:
-- Составления меню на день/несколько дней с учётом всех продуктов, КБЖУ, нутриентов и сроков годности
-- Анализа ЖКТ дневника и рекомендаций
-- Составления списка покупок
-- Общих рекомендаций по питанию
-
-Поле yazio.diary содержит фактически съеденное за последние дни с граммовками блюд.
-Учитывай это при составлении меню — что уже съедено сегодня, какие нутриенты закрыты, что ещё нужно добрать.
-Ответ верни в виде JSON с полями: menu, macros, shopping, gut_recommendations, notes`,
-
     profile:{
       gender:g.gender||'не указан',
       age:age?`${age} лет`:null,
-      birthdate:g.birthdate||null,
       cycle_phase:cycle?`День ${cycle.dayOfCycle} из ${cycle.len}, фаза: ${cycle.phase}`:null,
       kcal:g.kcal,prot:g.prot,fat:g.fat,carb:g.carb,
       fiber:g.fiber,fat_ratio:g.fa,carb_ratio:g.ca,
@@ -3836,7 +3829,6 @@ function exportForClaude(){
       workout_days:(g.workoutDays||[]).map(i=>['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i]),
       workout_times:g.workoutTimes||{},
     },
-
     fridge:S.products.map(p=>({
       name:p.name,weight:p.weight,expiry:p.expiry,opened:p.opened||false,
       kcal:p.kcal,prot:p.prot,fat:p.fat,carb:p.carb,
@@ -3847,24 +3839,20 @@ function exportForClaude(){
       fe:p.fe,ca:p.ca,mg:p.mg,zn:p.zn,
       notes:p.notes||null,
     })),
-
     gut:{
-      log:S.gutLog||[],// все записи без сжатия
+      log:S.gutLog||[],
       suspects:S.gutSuspects||[],
       intolerances:S.gutIntolerances||[],
       microbiome_goal:g.microbiomeGoal||'',
     },
-
-    current_menu:S.menu||{},
     dishes_liked:(S.dishes||[]).filter(d=>d.liked).map(d=>d.name),
     dishes_disliked:(S.dishes||[]).filter(d=>d.disliked).map(d=>d.name),
     away_periods:S.awayPeriods||[],
     shopping_list:S.shoppingList||[],
-    wishes:S.wishes||[],
-
+    // Yazio — только последние 14 дней
     yazio:S.yazioData?{
       synced_at:S.yazioData.synced_at,
-      diary:S.yazioData.diary||[],
+      diary:(S.yazioData.diary||[]).slice(-14),
       summary:S.yazioData.summary||{},
     }:null,
   };
@@ -3875,7 +3863,7 @@ function exportForClaude(){
   const a=document.createElement('a');
   a.href=url;a.download=`nutrition_claude_export_${today}.json`;
   a.click();URL.revokeObjectURL(url);
-  alert(`✓ Файл экспортирован.\n\nЗагрузи его в Claude Projects или вставь содержимое в чат.\nAPI ключ НЕ включён в экспорт.`);
+  alert(`✓ Экспортировано.\nYazio: последние 14 дней. Меню и пожелания не включены. API ключ не включён.`);
 }
 
 function importFromClaude(){
@@ -3919,10 +3907,10 @@ function parseClaudeImport(){
           const existing=S.menu[dateKey]||{};
           if(hasMeals){
             // Есть блюда — полная замена
-            S.menu[dateKey]={...v,macros:v.macros||data.macros||{},reason:v.reason||data.reason||'',prepNote:v.prepNote||data.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||'',warnings:v.warnings||data.warnings||[]};
+            S.menu[dateKey]={...v,macros:v.macros||data.macros||{},reason:v.reason||data.reason||'',prepNote:v.prepNote||data.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||'',warnings:v.warnings||data.warnings||[],recipes:v.recipes||{}};
           }else{
             // Нет блюд — мёржим метаданные не трогая блюда
-            S.menu[dateKey]={...existing,...v,macros:v.macros||data.macros||existing.macros||{},reason:v.reason||data.reason||existing.reason||'',prepNote:v.prepNote||data.prepNote||existing.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||existing.workoutNote||'',warnings:v.warnings||data.warnings||existing.warnings||[]};
+            S.menu[dateKey]={...existing,...v,macros:v.macros||data.macros||existing.macros||{},reason:v.reason||data.reason||existing.reason||'',prepNote:v.prepNote||data.prepNote||existing.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||existing.workoutNote||'',warnings:v.warnings||data.warnings||existing.warnings||[],recipes:v.recipes||existing.recipes||{}};
           }
         }
       });
@@ -5357,7 +5345,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.7.1';
+const APP_VERSION='2.7.2';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
