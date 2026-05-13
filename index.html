@@ -3907,10 +3907,10 @@ function parseClaudeImport(){
           const existing=S.menu[dateKey]||{};
           if(hasMeals){
             // Есть блюда — полная замена
-            S.menu[dateKey]={...v,macros:v.macros||data.macros||{},reason:v.reason||data.reason||'',prepNote:v.prepNote||data.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||'',warnings:v.warnings||data.warnings||[],recipes:v.recipes||{}};
+            S.menu[dateKey]={...v,macros:v.macros||data.macros||{},reason:v.reason||data.reason||'',prepNote:v.prepNote||data.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||'',warnings:v.warnings||data.warnings||[],recipes:v.recipes||data.recipes||{}};
           }else{
             // Нет блюд — мёржим метаданные не трогая блюда
-            S.menu[dateKey]={...existing,...v,macros:v.macros||data.macros||existing.macros||{},reason:v.reason||data.reason||existing.reason||'',prepNote:v.prepNote||data.prepNote||existing.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||existing.workoutNote||'',warnings:v.warnings||data.warnings||existing.warnings||[],recipes:v.recipes||existing.recipes||{}};
+            S.menu[dateKey]={...existing,...v,macros:v.macros||data.macros||existing.macros||{},reason:v.reason||data.reason||existing.reason||'',prepNote:v.prepNote||data.prepNote||existing.prepNote||'',workoutNote:v.workoutNote||data.workoutNote||existing.workoutNote||'',warnings:v.warnings||data.warnings||existing.warnings||[],recipes:v.recipes||data.recipes||existing.recipes||{}};
           }
         }
       });
@@ -5345,7 +5345,7 @@ function forceUpdate(){
 }
 
 /* ── INIT ── */
-const APP_VERSION='2.7.3';
+const APP_VERSION='2.7.4';
 load();
 initSettingsUI();
 document.getElementById('appVersion').textContent='v'+APP_VERSION;
